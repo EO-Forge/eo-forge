@@ -1,0 +1,8 @@
+.ipynb_checkpoints/
+.pyc
+.vscode/
+.idea
+
+examples/data/*
+
+__pycache__/
