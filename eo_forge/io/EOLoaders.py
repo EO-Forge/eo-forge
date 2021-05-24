@@ -16,7 +16,7 @@ from sentinelhub import DataCollection
 
 from eo_forge.utils.landsat import (
     calibrate_landsat8,
-    calibrate_landsat_bqa,
+    calibrate_landsat_bqa, calibrate_landsat5,
 )
 from eo_forge.utils.raster_utils import (
     resample_raster,
@@ -726,10 +726,12 @@ class LandsatLoader(BaseLoaderTask):
         if self.spacecraft == 8:
             self._ordered_bands = tuple(LANDSAT8_BANDS_RESOLUTION.keys())
             self._filter_values = [1, 2720]
+            self.calibrate_func = calibrate_landsat8
         else:
             # landsat5
             self._ordered_bands = tuple(LANDSAT5_BANDS_RESOLUTION.keys())
             self._filter_values = [1, 672]
+            self.calibrate_func = calibrate_landsat5
 
         self.reflectance = reflectance
         self.raw_metadata = None
@@ -841,7 +843,7 @@ class LandsatLoader(BaseLoaderTask):
                 raster, self._filter_values, close=True
             )
         else:
-            return calibrate_landsat8(
+            return self.calibrate_func(
                 raster, band, self.raw_metadata, reflectance=self.reflectance
             )
 
