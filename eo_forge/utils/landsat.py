@@ -113,10 +113,10 @@ def calibrate_landsat5(
 
         if band != "B6":
             zA = np.radians(
-                90 - float(metadata["IMAGE_ATTRIBUTES"]["SUN_ELEVATION"])
+                90 - float(metadata["SUN_ELEVATION"])
             )
             es_distance = float(
-                metadata["IMAGE_ATTRIBUTES"]["EARTH_SUN_DISTANCE"]
+                metadata["EARTH_SUN_DISTANCE"]
             )
             esun_band = esun[band]
             data = data * np.pi * es_distance ** 2 / (esun_band * np.cos(zA))

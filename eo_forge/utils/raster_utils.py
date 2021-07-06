@@ -517,6 +517,29 @@ def apply_nodata_mask(raster_dataset, raster_mask, nodata=0, out_path=None):
         return write_raster(out_path, data, **profile)
 
 
+def apply_isvalid_mask(raster_dataset, raster_mask, nodata=0, out_path=None):
+    """"""
+    data = raster_dataset.read()
+    mask = raster_mask.read(1)
+    data_masked = []
+    for i, band in enumerate(data, 1):
+        data_masked.append(np.where(mask > 0, band, nodata))
+
+    data = np.stack(data_masked, axis=0)
+
+    profile = raster_dataset.profile.copy()
+    profile.update(
+        {
+            "nodata": nodata,
+        }
+    )
+
+    if out_path is None:
+        return write_mem_raster(data, **profile)
+    else:
+        return write_raster(out_path, data, **profile)
+
+
 def get_is_valid_mask(raster_dataset, filter_values=(0, 0), out_path=None):
     """get_nodata mask"""
     # as numpy (NxM)
@@ -536,3 +559,16 @@ def get_is_valid_mask(raster_dataset, filter_values=(0, 0), out_path=None):
         return write_mem_raster(mask, **profile)
     else:
         return write_raster(out_path, mask, **profile)
+
+def get_raster_data_and_profile(raster):
+    """get raster data and profile
+    Parameters
+    ----------
+        raster: raster instance (rasterio open)
+
+    Return
+    ------
+        raster.read()
+        raster.profile
+    """
+    return raster.read(), raster.profile
