@@ -1,16 +1,12 @@
 # -*- coding: utf-8 -*-
 import gc
-import glob
 import os
 import warnings
 from abc import abstractmethod
-from datetime import datetime
 
 import numpy as np
 import rasterio
 from google.cloud import storage
-from lxml import etree
-
 
 from eo_forge.utils.raster_utils import (
     resample_raster,
@@ -37,12 +33,12 @@ class BaseLoaderTask(object):
     _rasterio_driver = None
 
     def __init__(
-            self,
-            folder,
-            resolution=30,
-            bands=None,
-            bbox=None,
-            **kwargs,
+        self,
+        folder,
+        resolution=30,
+        bands=None,
+        bbox=None,
+        **kwargs,
     ):
         """
         Constructor.
@@ -103,9 +99,7 @@ class BaseLoaderTask(object):
         storage_client = storage.Client()
 
         bucket = storage_client.bucket(bucket_name)
-        blobs = bucket.list_blobs(
-            prefix=os.path.relpath(bucket_url, bucket_name)
-        )
+        blobs = bucket.list_blobs(prefix=os.path.relpath(bucket_url, bucket_name))
 
         print(f"Downloading {os.path.basename(bucket_url)} in {dest_dir}")
         for blob in blobs:
@@ -159,9 +153,9 @@ class BaseLoaderTask(object):
         raise NotImplementedError
 
     def _get_bands_data(
-            self,
-            metadata,
-            **kwargs,
+        self,
+        metadata,
+        **kwargs,
     ):
         """
         Gets bands data.
@@ -233,9 +227,7 @@ class BaseLoaderTask(object):
             if len(data_file) == 0:
                 warnings.warn(f"No files found for the {band} band")
 
-            raster_dataset = rasterio.open(
-                data_file, driver=self._rasterio_driver
-            )
+            raster_dataset = rasterio.open(data_file, driver=self._rasterio_driver)
 
             # Check if resampling is needed
             resample_flag, scale_factor, true_pixel = check_resample(
@@ -303,8 +295,8 @@ class BaseLoaderTask(object):
                     raster_dataset = reproject_raster_to_bbox(raster_dataset, roi_bbox)
 
             else:
-                full_match=None
-                area=None
+                full_match = None
+                area = None
                 # No BBOX
                 if resample_flag:
                     raster_dataset = resample_raster(
@@ -328,12 +320,10 @@ class BaseLoaderTask(object):
                 )
 
             raster_dataset = apply_isvalid_mask(raster_dataset, raster_dataset_mask)
-           
-
 
             # Get Data
             data, data_profile = get_raster_data_and_profile(raster_dataset)
-          
+
             # keep just [n x m] dimensions
             base_bands_data[band] = data.squeeze()
             base_bands_data_profiles[band] = data_profile
@@ -341,12 +331,12 @@ class BaseLoaderTask(object):
 
         # Help python a little bit with the memory management
         gc.collect()
-        return base_bands_data, base_bands_data_profiles,  base_bands_match_
+        return base_bands_data, base_bands_data_profiles, base_bands_match_
 
     def _get_cloud_mask(
-            self,
-            raster_dataset,
-            **kwargs,
+        self,
+        raster_dataset,
+        **kwargs,
     ):
         """
         Gets bands data.
@@ -391,7 +381,7 @@ class BaseLoaderTask(object):
             data_profile: raster cloud data profile
 
         """
-        cloud_band=kwargs.get("cloud_band", "BQA")
+        cloud_band = kwargs.get("cloud_band", "BQA")
         enable_transform = kwargs.get("enable_transform", True)
         crop = kwargs.pop("crop", True)
         hard_bbox = kwargs.get("hard_bbox", False)
@@ -427,9 +417,7 @@ class BaseLoaderTask(object):
             if resample_flag:
                 # Resample taking special care of the borders.
                 # Add a small buffer to the BBox to take into account the borders.
-                roi_check_buffered = set_buffer_on_gdf(
-                    roi_check, buffer=5 * true_pixel
-                )
+                roi_check_buffered = set_buffer_on_gdf(roi_check, buffer=5 * true_pixel)
 
                 # Pre-clip the raster with the buffered bbox.
                 raster_dataset = clip_raster(
@@ -480,27 +468,24 @@ class BaseLoaderTask(object):
             raster_dataset = self.post_process_band(raster_dataset, cloud_band)
 
         if reproject:
-            raster_dataset = reproject_raster_north_south(
-                raster_dataset, close=True
-            )
-
+            raster_dataset = reproject_raster_north_south(raster_dataset, close=True)
 
         # Get Data
         data, data_profile = get_raster_data_and_profile(raster_dataset)
-        
+
         # Help python a little bit with the memory management
         gc.collect()
-        return data.astype(rasterio.ubyte),data_profile
+        return data.astype(rasterio.ubyte), data_profile
 
     def execute(
-            self,
-            product_id=None,
-            download="auto",
-            process_clouds=True,
-            write_file=None, # if not None, will be used as write suffix (before  file extension)
-            raster_return_open=False,
-            folder_proc_='./',
-            **kwargs,
+        self,
+        product_id=None,
+        download="auto",
+        process_clouds=True,
+        write_file=None,  # if not None, will be used as write suffix (before  file extension)
+        raster_return_open=False,
+        folder_proc_="./",
+        **kwargs,
     ):
         """
         Implement the base execute function for the loaders.
@@ -533,7 +518,7 @@ class BaseLoaderTask(object):
             with raster data, cloud data and metadata, including match type
         """
 
-        self.folder_proc_=folder_proc_
+        self.folder_proc_ = folder_proc_
 
         bbox = kwargs.pop("bbox", self.bbox)
         if download.lower() not in ("auto", "force", "skip"):
@@ -544,8 +529,8 @@ class BaseLoaderTask(object):
 
         if os.path.isdir(product_id):
             product_path = product_id
-        elif os.path.isdir(os.path.join(self.archive_folder,product_id)):
-            product_path = os.path.join(self.archive_folder,product_id)
+        elif os.path.isdir(os.path.join(self.archive_folder, product_id)):
+            product_path = os.path.join(self.archive_folder, product_id)
         else:
             product_path = self._get_product_path(product_id)
 
@@ -567,7 +552,7 @@ class BaseLoaderTask(object):
         metadata = self._read_metadata(product_path)
         # Note: we keep metadata in the class
         metadata["product_path"] = product_path
-        self.metadata_=metadata
+        self.metadata_ = metadata
         self.metadata_.update(self.raw_metadata)
 
         (
@@ -588,12 +573,11 @@ class BaseLoaderTask(object):
             base_bands_data_profiles[band] for band in ordered_bands
         ]
         _base_bands_match_ = [base_band_match[band] for band in ordered_bands]
-       
 
         # [bands x n x m ] -> rasterio order
         data = np.stack(_base_bands_data, axis=0)
         data_dtype = _base_bands_data_profiles[0]["dtype"]
-        
+
         # For export
         base_profile = _base_bands_data_profiles[0]
         base_profile.update(
@@ -604,7 +588,7 @@ class BaseLoaderTask(object):
                 "compress": "lzw",
             }
         )
-         # check match
+        # check match
         match_ = [li[0] for li in _base_bands_match_]
         # Update write_suffix
         if all(match_):
@@ -632,8 +616,10 @@ class BaseLoaderTask(object):
         # Quality Band
         if process_clouds:
             cloud_raster = self._preprocess_clouds_mask(metadata)
-            cloud_data,cloud_profile=self._get_cloud_mask(cloud_raster,bbox=bbox, **kwargs)
-            
+            cloud_data, cloud_profile = self._get_cloud_mask(
+                cloud_raster, bbox=bbox, **kwargs
+            )
+
             # make raster_cloud
             cloud_profile.update(
                 {
@@ -653,9 +639,7 @@ class BaseLoaderTask(object):
                     + write_file
                     + write_end,
                 )
-                raster_cloud = write_raster(
-                    file_cloud, cloud_data, **cloud_profile
-                )
+                raster_cloud = write_raster(file_cloud, cloud_data, **cloud_profile)
             # clean
             del cloud_data
 

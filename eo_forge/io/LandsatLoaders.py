@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
-import gc
 import glob
 import os
 import warnings
-from abc import abstractmethod
-from collections import OrderedDict
 from datetime import datetime
 
 import rasterio
 
 from eo_forge.utils.landsat import (
     calibrate_landsat8,
-    calibrate_landsat_bqa, calibrate_landsat5,
+    calibrate_landsat_bqa,
+    calibrate_landsat5,
+    LANDSAT5_BANDS_RESOLUTION,
+    LANDSAT8_BANDS_RESOLUTION,
+    LANDSAT_SUPPORTED_RESOLUTIONS,
 )
 from eo_forge.utils.raster_utils import (
     get_is_valid_mask,
@@ -20,53 +21,23 @@ from eo_forge.utils.raster_utils import (
 from eo_forge.io.GenLoader import BaseLoaderTask
 
 ###############################
-# Landsat General definitions
-# Also define a default ordering for the bands.
-LANDSAT8_BANDS_RESOLUTION = OrderedDict(
-    B1=30,
-    B2=30,
-    B3=30,
-    B4=30,
-    B5=30,
-    B6=30,
-    B7=30,
-    B8=15,
-    B9=30,
-    B10=100,
-    B11=100,
-)
-
-# Landsat5 Bands resolution in meters
-# Also define a default ordering for the bands.
-LANDSAT5_BANDS_RESOLUTION = OrderedDict(
-    B1=30,
-    B2=30,
-    B3=30,
-    B4=30,
-    B5=30,
-    B6=30,  # 120m but resampled to 30
-    B7=30,   
-)
-
-# Resolutions in meters for landsat 5 and 8
-LANDSAT_SUPPORTED_RESOLUTIONS = (30, 60, 90, 120)
 
 
 class LandsatLoader(BaseLoaderTask):
-    """Task for Loading Landsat5 and Landsat8 images into an EOPATCH."""
+    """Task for Loading Landsat5 and Landsat8 images into a single raster file (and cloud file)"""
 
     _supported_resolutions = LANDSAT_SUPPORTED_RESOLUTIONS
     _google_cloud_bucket = "gs://gcp-public-data-landsat"
     _rasterio_driver = "GTiff"
 
     def __init__(
-            self,
-            folder,
-            resolution=30,
-            spacecraft=5,
-            bands=None,
-            reflectance=True,
-            **kwargs,
+        self,
+        folder,
+        resolution=30,
+        spacecraft=5,
+        bands=None,
+        reflectance=True,
+        **kwargs,
     ):
         """
         Contructor.
@@ -135,21 +106,16 @@ class LandsatLoader(BaseLoaderTask):
         self.raw_metadata = {
             key.strip(): cast_value(val)
             for key, val in (
-                line.split("=")
-                for line in open(metadata_file[0])
-                if "=" in line
+                line.split("=") for line in open(metadata_file[0]) if "=" in line
             )
         }
 
         metadata = {
-            "cloud_cover": float(
-                self.raw_metadata.get("CLOUD_COVER_LAND", None)
-            )
+            "cloud_cover": float(self.raw_metadata.get("CLOUD_COVER_LAND", None))
         }
 
         if all(
-                key in self.raw_metadata
-                for key in ("DATE_ACQUIRED", "SCENE_CENTER_TIME")
+            key in self.raw_metadata for key in ("DATE_ACQUIRED", "SCENE_CENTER_TIME")
         ):
             _time = self.raw_metadata["SCENE_CENTER_TIME"].split(".")[0]
             _date = self.raw_metadata["DATE_ACQUIRED"]
@@ -160,15 +126,12 @@ class LandsatLoader(BaseLoaderTask):
             # If the timestamp is not present in the metadata, we cannot use the file
             # name since it does not contains the time, only the date.
 
-        base_bands = [
-            band for band in self._ordered_bands if band.upper() != "BQA"
-        ]
+        base_bands = [band for band in self._ordered_bands if band.upper() != "BQA"]
 
         band_files = {
             band: os.path.join(product_path, self.raw_metadata[key])
             for band, key in (
-                (_band, f"FILE_NAME_BAND_{int(_band[1:])}")
-                for _band in base_bands
+                (_band, f"FILE_NAME_BAND_{int(_band[1:])}") for _band in base_bands
             )
             if key in self.raw_metadata
         }
@@ -201,12 +164,10 @@ class LandsatLoader(BaseLoaderTask):
             product_id_parts[2][3:],
         )
         return os.path.join(self.archive_folder, sub_dirs, product_id)
-    
+
     def post_process_band(self, raster, band):
         if band.upper() == "BQA":
-            return calibrate_landsat_bqa(
-                raster, self._filter_values, close=True
-            )
+            return calibrate_landsat_bqa(raster, self._filter_values, close=True)
         else:
             return self.calibrate_func(
                 raster, band, self.raw_metadata, reflectance=self.reflectance
@@ -218,19 +179,18 @@ class LandsatLoader(BaseLoaderTask):
 
     def _is_download_needed(self, filename):
         """Return True if the filename correspond to a selected band."""
-        bands = [band.replace("B0", "B") for band in self.bands] #FIXME
+        bands = [band.replace("B0", "B") for band in self.bands]  # FIXME
         return any([filename.endswith(f"{band}.TIF") for band in bands])
 
-    def _preprocess_clouds_mask(self,metadata,band='BQA',**kwargs):
+    def _preprocess_clouds_mask(self, metadata, band="BQA", **kwargs):
         """Return Raster BQA"""
-       
+
         band = band.upper()
         data_file = metadata["band_files"][band]
 
         if len(data_file) == 0:
             warnings.warn(f"No files found for the {band} band")
 
-        raster_dataset = rasterio.open(
-            data_file, driver=self._rasterio_driver)
+        raster_dataset = rasterio.open(data_file, driver=self._rasterio_driver)
 
         return raster_dataset

@@ -1,56 +1,23 @@
 # -*- coding: utf-8 -*-
-import gc
 import glob
 import os
-from abc import abstractmethod
-from collections import OrderedDict
 from datetime import datetime
 
-import numpy as np
-import rasterio
-from google.cloud import storage
 from lxml import etree
 
-
-
 from eo_forge.utils.raster_utils import (
-    resample_raster,
-    clip_raster,
-    check_resample,
-    bbox_from_raster,
-    reproject_raster_north_south,
-    check_raster_clip_crs,
-    check_raster_shape_match,
     get_is_valid_mask,
-    reproject_raster_to_bbox,
 )
-from eo_forge.utils.sentinel import calibrate_sentinel2
-from eo_forge.utils.shapes import bbox_to_geodataframe, set_buffer_on_gdf
+from eo_forge.utils.sentinel import (
+    calibrate_sentinel2,
+    SENTINEL2_BANDS_RESOLUTION,
+    SENTINEL2_SUPPORTED_RESOLUTIONS,
+)
 from eo_forge.io.GenLoader import BaseLoaderTask
 
-###############################
-# Sentinel2 General definitions
-
-SENTINEL2_BANDS_RESOLUTION = OrderedDict(
-    B01=60,
-    B02=10,
-    B03=10,
-    B04=10,
-    B05=20,
-    B06=20,
-    B07=20,
-    B08=10,
-    B8A=20,
-    B09=60,
-    B10=60,
-    B11=20,
-    B12=20,
-)
-SENTINEL2_SUPPORTED_RESOLUTIONS = (10, 20, 60, 120)  # in meters
-
-
+######################################################################
 class Sentinel2Loader(BaseLoaderTask):
-    """Task for importing Sentinel SAFE data into an EOPatch."""
+    """Task for importing Sentinel SAFE data into a Single Raster (and Clouds File)."""
 
     _supported_resolutions = SENTINEL2_SUPPORTED_RESOLUTIONS
     _ordered_bands = tuple(SENTINEL2_BANDS_RESOLUTION.keys())
@@ -58,12 +25,12 @@ class Sentinel2Loader(BaseLoaderTask):
     _rasterio_driver = "JP2OpenJPEG"
 
     def __init__(
-            self,
-            folder,
-            bands=None,
-            resolution=20,
-            bbox=None,
-            **kwargs,
+        self,
+        folder,
+        bands=None,
+        resolution=20,
+        bbox=None,
+        **kwargs,
     ):
         """
         Contructor.
@@ -109,27 +76,19 @@ class Sentinel2Loader(BaseLoaderTask):
 
         if not os.path.isfile(metadata_file):
             # Try old format metadata
-            metadata_file = glob.glob(
-                os.path.join(product_path, "S2*_OPER_*.xml")
-            )
+            metadata_file = glob.glob(os.path.join(product_path, "S2*_OPER_*.xml"))
             if len(metadata_file):
                 metadata_file = os.path.join(product_path, metadata_file[0])
             else:
-                raise RuntimeError(
-                    f"Metadata file not found in {product_path}"
-                )
+                raise RuntimeError(f"Metadata file not found in {product_path}")
 
         tree = etree.parse(metadata_file)
         root = tree.getroot()
         images_elements = root.findall(".//Granule/IMAGE_FILE")
 
-        images_elements_txt = [
-            element.text.strip() for element in images_elements
-        ]
+        images_elements_txt = [element.text.strip() for element in images_elements]
         band_files = {
-            element_txt.split("_")[-1]: os.path.join(
-                product_path, f"{element_txt}.jp2"
-            )
+            element_txt.split("_")[-1]: os.path.join(product_path, f"{element_txt}.jp2")
             for element_txt in images_elements_txt
         }
 
@@ -150,9 +109,7 @@ class Sentinel2Loader(BaseLoaderTask):
 
         quantif_value_element = root.find(".//QUANTIFICATION_VALUE")
         if quantif_value_element is not None:
-            metadata["quantification_value"] = int(
-                quantif_value_element.text.strip()
-            )
+            metadata["quantification_value"] = int(quantif_value_element.text.strip())
 
         product_time = root.find(".//PRODUCT_START_TIME")
         if product_time is not None:
@@ -175,9 +132,7 @@ class Sentinel2Loader(BaseLoaderTask):
         """
         # S2A_MSIL1C_20151001T142056_N0204_R010_T20JLQ_20151001T143019.SAFE
         tile = product_id.split("_")[5][1:]  # 20JLQ
-        sub_dirs = os.path.join(
-            "tiles", tile[:2], tile[2], tile[3:]
-        )  # tiles/20/J/LQ
+        sub_dirs = os.path.join("tiles", tile[:2], tile[2], tile[3:])  # tiles/20/J/LQ
         return os.path.join(self.archive_folder, sub_dirs, product_id)
 
     def post_process_band(self, raster, band):

@@ -16,7 +16,8 @@ from sentinelhub import DataCollection
 
 from eo_forge.utils.landsat import (
     calibrate_landsat8,
-    calibrate_landsat_bqa, calibrate_landsat5,
+    calibrate_landsat_bqa,
+    calibrate_landsat5,
 )
 from eo_forge.utils.raster_utils import (
     resample_raster,
@@ -98,12 +99,12 @@ class BaseLoaderTask(EOTask):
     _rasterio_driver = None
 
     def __init__(
-            self,
-            folder,
-            resolution=30,
-            bands=None,
-            bbox=None,
-            **kwargs,
+        self,
+        folder,
+        resolution=30,
+        bands=None,
+        bbox=None,
+        **kwargs,
     ):
         """
         Constructor.
@@ -164,9 +165,7 @@ class BaseLoaderTask(EOTask):
         storage_client = storage.Client()
 
         bucket = storage_client.bucket(bucket_name)
-        blobs = bucket.list_blobs(
-            prefix=os.path.relpath(bucket_url, bucket_name)
-        )
+        blobs = bucket.list_blobs(prefix=os.path.relpath(bucket_url, bucket_name))
 
         print(f"Downloading {os.path.basename(bucket_url)} in {dest_dir}")
         for blob in blobs:
@@ -213,9 +212,9 @@ class BaseLoaderTask(EOTask):
         raise NotImplementedError
 
     def _get_bands_data(
-            self,
-            metadata,
-            **kwargs,
+        self,
+        metadata,
+        **kwargs,
     ):
         """
         Gets bands data.
@@ -288,9 +287,7 @@ class BaseLoaderTask(EOTask):
             if len(data_file) == 0:
                 warnings.warn(f"No files found for the {band} band")
 
-            raster_dataset = rasterio.open(
-                data_file, driver=self._rasterio_driver
-            )
+            raster_dataset = rasterio.open(data_file, driver=self._rasterio_driver)
 
             # Check if resampling is needed
             resample_flag, scale_factor, true_pixel = check_resample(
@@ -404,12 +401,12 @@ class BaseLoaderTask(EOTask):
         return base_bands_data, extra_bands, raster_bbox, band_masks
 
     def execute(
-            self,
-            eopatch=None,
-            product_id=None,
-            download="auto",
-            return_metadata=False,
-            **kwargs,
+        self,
+        eopatch=None,
+        product_id=None,
+        download="auto",
+        return_metadata=False,
+        **kwargs,
     ):
         """
         Implement the base execute function for the loaders.
@@ -518,9 +515,7 @@ class BaseLoaderTask(EOTask):
 
         if "BQA" in extra_bands:
             bqa_data = extra_bands["BQA"]
-            eopatch[FeatureType.MASK]["CLM"] = bqa_data[
-                                               np.newaxis, :, :, np.newaxis
-                                               ]
+            eopatch[FeatureType.MASK]["CLM"] = bqa_data[np.newaxis, :, :, np.newaxis]
 
         eopatch[FeatureType.TIMESTAMP] = [metadata["product_time"]]
 
@@ -541,13 +536,13 @@ class Sentinel2Loader(BaseLoaderTask):
     _rasterio_driver = "JP2OpenJPEG"
 
     def __init__(
-            self,
-            folder,
-            bands=None,
-            resolution=20,
-            data_collection=DataCollection.SENTINEL2_L1C,
-            bbox=None,
-            **kwargs,
+        self,
+        folder,
+        bands=None,
+        resolution=20,
+        data_collection=DataCollection.SENTINEL2_L1C,
+        bbox=None,
+        **kwargs,
     ):
         """
         Contructor.
@@ -594,27 +589,19 @@ class Sentinel2Loader(BaseLoaderTask):
 
         if not os.path.isfile(metadata_file):
             # Try old format metadata
-            metadata_file = glob.glob(
-                os.path.join(product_path, "S2*_OPER_*.xml")
-            )
+            metadata_file = glob.glob(os.path.join(product_path, "S2*_OPER_*.xml"))
             if len(metadata_file):
                 metadata_file = os.path.join(product_path, metadata_file[0])
             else:
-                raise RuntimeError(
-                    f"Metadata file not found in {product_path}"
-                )
+                raise RuntimeError(f"Metadata file not found in {product_path}")
 
         tree = etree.parse(metadata_file)
         root = tree.getroot()
         images_elements = root.findall(".//Granule/IMAGE_FILE")
 
-        images_elements_txt = [
-            element.text.strip() for element in images_elements
-        ]
+        images_elements_txt = [element.text.strip() for element in images_elements]
         band_files = {
-            element_txt.split("_")[-1]: os.path.join(
-                product_path, f"{element_txt}.jp2"
-            )
+            element_txt.split("_")[-1]: os.path.join(product_path, f"{element_txt}.jp2")
             for element_txt in images_elements_txt
         }
 
@@ -635,9 +622,7 @@ class Sentinel2Loader(BaseLoaderTask):
 
         quantif_value_element = root.find(".//QUANTIFICATION_VALUE")
         if quantif_value_element is not None:
-            metadata["quantification_value"] = int(
-                quantif_value_element.text.strip()
-            )
+            metadata["quantification_value"] = int(quantif_value_element.text.strip())
 
         product_time = root.find(".//PRODUCT_START_TIME")
         if product_time is not None:
@@ -660,9 +645,7 @@ class Sentinel2Loader(BaseLoaderTask):
         """
         # S2A_MSIL1C_20151001T142056_N0204_R010_T20JLQ_20151001T143019.SAFE
         tile = product_id.split("_")[5][1:]  # 20JLQ
-        sub_dirs = os.path.join(
-            "tiles", tile[:2], tile[2], tile[3:]
-        )  # tiles/20/J/LQ
+        sub_dirs = os.path.join("tiles", tile[:2], tile[2], tile[3:])  # tiles/20/J/LQ
         return os.path.join(self.archive_folder, sub_dirs, product_id)
 
     def post_process_band(self, raster, band):
@@ -695,13 +678,13 @@ class LandsatLoader(BaseLoaderTask):
     _rasterio_driver = "GTiff"
 
     def __init__(
-            self,
-            folder,
-            resolution=30,
-            spacecraft=5,
-            bands=None,
-            reflectance=True,
-            **kwargs,
+        self,
+        folder,
+        resolution=30,
+        spacecraft=5,
+        bands=None,
+        reflectance=True,
+        **kwargs,
     ):
         """
         Contructor.
@@ -770,21 +753,16 @@ class LandsatLoader(BaseLoaderTask):
         self.raw_metadata = {
             key.strip(): cast_value(val)
             for key, val in (
-                line.split("=")
-                for line in open(metadata_file[0])
-                if "=" in line
+                line.split("=") for line in open(metadata_file[0]) if "=" in line
             )
         }
 
         metadata = {
-            "cloud_cover": float(
-                self.raw_metadata.get("CLOUD_COVER_LAND", None)
-            )
+            "cloud_cover": float(self.raw_metadata.get("CLOUD_COVER_LAND", None))
         }
 
         if all(
-                key in self.raw_metadata
-                for key in ("DATE_ACQUIRED", "SCENE_CENTER_TIME")
+            key in self.raw_metadata for key in ("DATE_ACQUIRED", "SCENE_CENTER_TIME")
         ):
             _time = self.raw_metadata["SCENE_CENTER_TIME"].split(".")[0]
             _date = self.raw_metadata["DATE_ACQUIRED"]
@@ -795,15 +773,12 @@ class LandsatLoader(BaseLoaderTask):
             # If the timestamp is not present in the metadata, we cannot use the file
             # name since it does not contains the time, only the date.
 
-        base_bands = [
-            band for band in self._ordered_bands if band.upper() != "BQA"
-        ]
+        base_bands = [band for band in self._ordered_bands if band.upper() != "BQA"]
 
         band_files = {
             band: os.path.join(product_path, self.raw_metadata[key])
             for band, key in (
-                (_band, f"FILE_NAME_BAND_{int(_band[1:])}")
-                for _band in base_bands
+                (_band, f"FILE_NAME_BAND_{int(_band[1:])}") for _band in base_bands
             )
             if key in self.raw_metadata
         }
@@ -839,9 +814,7 @@ class LandsatLoader(BaseLoaderTask):
 
     def post_process_band(self, raster, band):
         if band.upper() == "BQA":
-            return calibrate_landsat_bqa(
-                raster, self._filter_values, close=True
-            )
+            return calibrate_landsat_bqa(raster, self._filter_values, close=True)
         else:
             return self.calibrate_func(
                 raster, band, self.raw_metadata, reflectance=self.reflectance
