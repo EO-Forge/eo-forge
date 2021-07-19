@@ -214,7 +214,10 @@ class gcSatImg(object):
             if clouds:
                 pd_ = self.get_clouds_from_meta(pd_, meta_key=meta_key)
         else:
-            pd_ = pd.DataFrame()
+            if clouds:
+                pd_ = pd.DataFrame(columns=["product-id", "base-url","date","clouds"])
+            else:
+                pd_ = pd.DataFrame(columns=["product-id", "base-url","date"])
         #
         self.filt_imgs = filtered_imgs
         self.pd_filt = pd_
