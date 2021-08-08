@@ -2,7 +2,6 @@
 .pyc
 .vscode/
 .idea
-
 examples/data/*
-
 __pycache__/
+TEMP*

@@ -554,7 +554,7 @@ class BaseLoaderTask(object):
         metadata["product_path"] = product_path
         self.metadata_ = metadata
         self.metadata_.update(self.raw_metadata)
-
+        
         (
             base_bands_data,
             base_bands_data_profiles,
@@ -615,7 +615,7 @@ class BaseLoaderTask(object):
         file_cloud = None
         # Quality Band
         if process_clouds:
-            cloud_raster = self._preprocess_clouds_mask(metadata)
+            cloud_raster = self._preprocess_clouds_mask(metadata,**{'raster_base':raster,'no_data':0})
             cloud_data, cloud_profile = self._get_cloud_mask(
                 cloud_raster, bbox=bbox, **kwargs
             )
