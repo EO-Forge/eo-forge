@@ -165,6 +165,12 @@ class LandsatLoader(BaseLoaderTask):
         )
         return os.path.join(self.archive_folder, sub_dirs, product_id)
 
+    def _clean_product_id(self, product_id):
+        """ purpose: clean product id from extensions
+        """
+        return product_id
+
+
     def post_process_band(self, raster, band):
         if band.upper() == "BQA":
             return calibrate_landsat_bqa(raster, self._filter_values, close=True)

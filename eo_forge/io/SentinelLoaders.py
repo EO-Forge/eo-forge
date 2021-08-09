@@ -180,6 +180,12 @@ class Sentinel2Loader(BaseLoaderTask):
         sub_dirs = os.path.join("tiles", tile[:2], tile[2], tile[3:])  # tiles/20/J/LQ
         return os.path.join(self.archive_folder, sub_dirs, product_id)
 
+    def _clean_product_id(self, product_id):
+        """ purpose: clean product id from extensions
+        """
+        return product_id.replace(".SAFE","")
+
+
     def post_process_band(self, raster, band):
         """
         Returns the calibrated Sentinel 2 Images to TOA-REF
