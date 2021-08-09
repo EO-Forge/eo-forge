@@ -2,20 +2,63 @@
 import glob
 import os
 from datetime import datetime
-
+import warnings
+import numpy as np
+import rasterio as rio
 from lxml import etree
+
+import geopandas as gpd
 
 from eo_forge.utils.raster_utils import (
     get_is_valid_mask,
+    shapes2array,
+    write_mem_raster
 )
 from eo_forge.utils.sentinel import (
     calibrate_sentinel2,
     SENTINEL2_BANDS_RESOLUTION,
     SENTINEL2_SUPPORTED_RESOLUTIONS,
 )
+
+from eo_forge.utils.utils import walk_dir_files
 from eo_forge.io.GenLoader import BaseLoaderTask
 
 ######################################################################
+
+
+def s2_cloud_preproc(base_dir,dump_file=None):
+    """
+    Read cloud mask file as geodataframe and write to disk (if necessary)
+    :param dump_file: file to be written (if None, just return the
+    geodataframe)
+    """
+    
+    _,_,g = walk_dir_files(base_dir,cases=['MSK_CLOUDS_B00.gml'])
+
+    if 'MSK_CLOUDS_B00.gml' in g:
+        mask_cloud_file_=g['MSK_CLOUDS_B00.gml'][0]
+    else:
+        mask_cloud_file_= None
+
+    gpd_ = None
+
+    if mask_cloud_file_ is None:
+        gpd_ = None
+        return gpd_
+    else:
+        try:
+            gpd_ = gpd.read_file(mask_cloud_file_)
+            if dump_file is None:
+                pass
+            else:
+                gpd_.to_file(dump_file)
+            return gpd_
+        except:  # noqa
+            print(
+                f"FAILED to read/dump file: {mask_cloud_file_}"
+            )
+            return None
+
 class Sentinel2Loader(BaseLoaderTask):
     """Task for importing Sentinel SAFE data into a Single Raster (and Clouds File)."""
 
@@ -47,6 +90,7 @@ class Sentinel2Loader(BaseLoaderTask):
         super().__init__(
             folder, resolution=resolution, bands=bands, bbox=bbox, **kwargs
         )
+        self.raw_metadata = None
 
     def _is_download_needed(self, filename):
         """Return True if the filename correspond to a selected band."""
@@ -123,6 +167,7 @@ class Sentinel2Loader(BaseLoaderTask):
                 safe_dir_timestamp, "%Y%m%dT%H%M%S"
             )
 
+        self.raw_metadata=metadata
         return metadata
 
     def _get_product_path(self, product_id):
@@ -135,16 +180,25 @@ class Sentinel2Loader(BaseLoaderTask):
         sub_dirs = os.path.join("tiles", tile[:2], tile[2], tile[3:])  # tiles/20/J/LQ
         return os.path.join(self.archive_folder, sub_dirs, product_id)
 
+    def _clean_product_id(self, product_id):
+        """ purpose: clean product id from extensions
+        """
+        return product_id.replace(".SAFE","")
+
+
     def post_process_band(self, raster, band):
         """
         Returns the calibrated Sentinel 2 Images to TOA-REF
         """
-        return calibrate_sentinel2(
-            raster,
-            band,
-            self.metadata_,
-            close=True,
-        )
+        if band.upper() == "BQA":
+            return raster
+        else:
+            return calibrate_sentinel2(
+                raster,
+                band,
+                self.metadata_,
+                close=True,
+            )
 
     def _get_is_valid_data(self, raster):
         """"""
@@ -155,3 +209,26 @@ class Sentinel2Loader(BaseLoaderTask):
                 self.metadata_["SATURATED"],
             ],
         )
+
+    def _preprocess_clouds_mask(self, metadata, **kwargs):
+        """Return Raster BQA"""
+
+
+        raster_base=kwargs['raster_base']
+        nodata=kwargs['no_data']
+        base_dir = metadata['product_path']
+
+        gpd_ = s2_cloud_preproc(base_dir)
+        if gpd_ is None:
+            array_ = np.zeros(raster_base.height, raster_base.width, dtype=rio.uint8)
+                
+        else:
+            array_ = shapes2array(gpd_, raster_base)
+
+        profile=raster_base.profile.copy()
+        profile.update({ 
+        "count":1,
+        "nodata":nodata
+        })
+        return write_mem_raster(array_[np.newaxis,...],**profile)
+

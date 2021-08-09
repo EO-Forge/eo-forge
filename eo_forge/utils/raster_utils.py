@@ -9,6 +9,7 @@ import rasterio.mask as rasterio_mask
 from geopandas import GeoDataFrame
 from rasterio import Affine, MemoryFile
 from rasterio import crs as rasterio_crs
+from rasterio.features import rasterize
 from rasterio.enums import Resampling
 from rasterio.warp import (
     transform as rasterio_transform,
@@ -596,3 +597,23 @@ def get_raster_data_and_profile(raster):
         raster.profile
     """
     return raster.read(), raster.profile
+
+def shapes2array(shapes, raster):
+    """set shapes to raster
+    Parameters
+    ----------
+        shapes: geodataframe
+
+    """
+
+    # read geometries
+    gpd_ = shapes
+    array_ = rasterize(
+        gpd_.geometry.values,
+        out_shape=(raster.height, raster.width),
+        fill=0,
+        transform=raster.transform,
+        default_value=1,
+        dtype=rio.uint8,
+    )
+    return array_

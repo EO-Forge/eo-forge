@@ -38,6 +38,29 @@ LANDSAT5_BANDS_RESOLUTION = OrderedDict(
 LANDSAT_SUPPORTED_RESOLUTIONS = (30, 60, 90, 120)
 
 
+
+def get_clouds_landsat(file):
+    """ purpouse: to read cloud image level from landsat metadata file
+
+    Parameters
+    ----------
+        file: path
+            path to metadata file
+
+    Returns
+    -------
+        cloud level
+    
+    """
+    with open(file, "r") as f:
+        lines = f.readlines()
+    cloud = None
+    for line in lines:
+        if "CLOUD_COVER_LAND" in line:
+            cloud = line.split("=")[1].replace("\n", "").strip()
+    return cloud
+
+
 def calibrate_landsat_bqa(
     raster,
     filter_values,
