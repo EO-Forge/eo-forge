@@ -220,7 +220,7 @@ class Sentinel2Loader(BaseLoaderTask):
 
         gpd_ = s2_cloud_preproc(base_dir)
         if gpd_ is None:
-            array_ = np.zeros(raster_base.height, raster_base.width, dtype=rio.uint8)
+            array_ = np.zeros((raster_base.height, raster_base.width), dtype=rio.uint8)
                 
         else:
             array_ = shapes2array(gpd_, raster_base)
