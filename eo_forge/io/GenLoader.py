@@ -299,7 +299,7 @@ class BaseLoaderTask(object):
                     )
 
                 if not full_match:
-                    raster_dataset = reproject_raster_to_bbox(raster_dataset, roi_bbox)
+                    raster_dataset = reproject_raster_to_bbox(raster_dataset, roi_check)
 
             else:
                 full_match = None
@@ -461,7 +461,7 @@ class BaseLoaderTask(object):
                 )
 
             if not full_match:
-                raster_dataset = reproject_raster_to_bbox(raster_dataset, roi_bbox)
+                raster_dataset = reproject_raster_to_bbox(raster_dataset, roi_check)
 
         else:
             # No BBOX
