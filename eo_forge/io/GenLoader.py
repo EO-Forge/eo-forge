@@ -6,7 +6,6 @@ from abc import abstractmethod
 
 import numpy as np
 import rasterio
-from google.cloud import storage
 
 from eo_forge.utils.raster_utils import (
     resample_raster,
@@ -29,7 +28,6 @@ class BaseLoaderTask(object):
 
     _supported_resolutions = tuple()
     _ordered_bands = tuple()
-    _google_cloud_bucket = ""
     _rasterio_driver = None
 
     def __init__(
@@ -79,43 +77,6 @@ class BaseLoaderTask(object):
                     warnings.warn(f"'{band}' is not a valid band. Ignoring")
                 else:
                     self.bands.append(band)
-
-    def download_product(self, bucket_url, dest_dir, force=False):
-        """
-        Downloads a blob from the bucket.
-
-        Parameters
-        ----------
-        bucket_url: url
-            Bucket URL to download. The prefix "gs://" is removed.
-        dest_dir: str
-            Destination directory for the downloaded files.
-        force: bool
-            If true, files are downloaded even if they already exists on the destination
-            folder. Otherwise, the download is skipped.
-        """
-        bucket_url = bucket_url.replace("gs://", "")
-        bucket_name = bucket_url.split("/")[0]
-        storage_client = storage.Client()
-
-        bucket = storage_client.bucket(bucket_name)
-        blobs = bucket.list_blobs(prefix=os.path.relpath(bucket_url, bucket_name))
-
-        print(f"Downloading {os.path.basename(bucket_url)} in {dest_dir}")
-        for blob in blobs:
-            filename = blob.name
-            if filename.endswith("$folder$"):
-                continue
-            if self._is_download_needed(filename):
-                dest_path = os.path.join(dest_dir, filename)
-                if not os.path.exists(dest_path) or force:
-                    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-                    blob.download_to_filename(dest_path)
-        print(f"Downloading finished")
-
-    def _is_download_needed(self, filename):
-        """Return True if the filename correspond to a selected band."""
-        raise NotImplementedError("_is_download_needed method not implemented.")
 
     @abstractmethod
     def _get_product_path(self, product_id):
@@ -487,7 +448,6 @@ class BaseLoaderTask(object):
     def execute(
         self,
         product_id=None,
-        download="auto",
         process_clouds=True,
         write_file=None,  # if not None, will be used as write suffix (before  file extension)
         raster_return_open=False,
@@ -501,12 +461,6 @@ class BaseLoaderTask(object):
         ----------
         product_id: str
             Tile product ID or name of the subfolder with the tile data.
-        download: str
-            Keyword to control the download of the data from Google Cloud.
-            Allowed values:
-            - skip: Do not download data
-            - auto: Only download data if needed.
-            - force: Always download data, even if it exists.
 
         Other parameters
         ----------------
@@ -528,11 +482,6 @@ class BaseLoaderTask(object):
         self.folder_proc_ = folder_proc_
 
         bbox = kwargs.pop("bbox", self.bbox)
-        if download.lower() not in ("auto", "force", "skip"):
-            raise ValueError(
-                f"Unexpected value for download keyword. Received: {download}.\n"
-                "Allowed: 'auto','force','skip'"
-            )
 
         if os.path.isdir(product_id):
             product_path = product_id
@@ -540,16 +489,6 @@ class BaseLoaderTask(object):
             product_path = os.path.join(self.archive_folder, product_id)
         else:
             product_path = self._get_product_path(product_id)
-
-        if download in ("auto", "force"):
-            # Download files from google cloud if needed.
-            full_bucket_url = os.path.join(
-                self._google_cloud_bucket,
-                os.path.relpath(product_path, self.archive_folder),
-            )
-            self.download_product(
-                full_bucket_url, self.archive_folder, force=(download == "force")
-            )
 
         if not os.path.isdir(product_path):
             raise RuntimeError(

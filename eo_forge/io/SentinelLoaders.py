@@ -2,7 +2,6 @@
 import glob
 import os
 from datetime import datetime
-import warnings
 import numpy as np
 import rasterio as rio
 from lxml import etree
@@ -64,7 +63,6 @@ class Sentinel2Loader(BaseLoaderTask):
 
     _supported_resolutions = SENTINEL2_SUPPORTED_RESOLUTIONS
     _ordered_bands = tuple(SENTINEL2_BANDS_RESOLUTION.keys())
-    _google_cloud_bucket = "gs://gcp-public-data-sentinel-2"
     _rasterio_driver = "JP2OpenJPEG"
 
     def __init__(
@@ -91,12 +89,6 @@ class Sentinel2Loader(BaseLoaderTask):
             folder, resolution=resolution, bands=bands, bbox=bbox, **kwargs
         )
         self.raw_metadata = None
-
-    def _is_download_needed(self, filename):
-        """Return True if the filename correspond to a selected band."""
-        if not filename.endswith("jp2"):
-            return True
-        return any([filename.endswith(f"{band}.jp2") for band in self.bands])
 
     def _read_metadata(self, product_path):
         """

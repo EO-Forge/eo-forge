@@ -27,7 +27,6 @@ class LandsatLoader(BaseLoaderTask):
     """Task for Loading Landsat5 and Landsat8 images into a single raster file (and cloud file)"""
 
     _supported_resolutions = LANDSAT_SUPPORTED_RESOLUTIONS
-    _google_cloud_bucket = "gs://gcp-public-data-landsat"
     _rasterio_driver = "GTiff"
 
     def __init__(
@@ -182,11 +181,6 @@ class LandsatLoader(BaseLoaderTask):
     def _get_is_valid_data(self, raster):
         """"""
         return get_is_valid_mask(raster, filter_values=[0, 0])
-
-    def _is_download_needed(self, filename):
-        """Return True if the filename correspond to a selected band."""
-        bands = [band.replace("B0", "B") for band in self.bands]  # FIXME
-        return any([filename.endswith(f"{band}.TIF") for band in bands])
 
     def _preprocess_clouds_mask(self, metadata, band="BQA", **kwargs):
         """Return Raster BQA"""
