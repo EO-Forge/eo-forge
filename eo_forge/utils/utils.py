@@ -9,6 +9,7 @@ def rem_trail_os_sep(scene_path_dir):
     )
     return scene_path_dir_
 
+
 def walk_dir_files(target_base_path_, cases=["*.i", "*.o", "*.r"]):
     """
     get dir and files from a target_path

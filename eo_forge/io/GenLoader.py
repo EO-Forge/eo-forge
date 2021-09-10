@@ -263,8 +263,8 @@ class BaseLoaderTask(object):
                     raster_dataset = reproject_raster_to_bbox(raster_dataset, roi_check)
 
             else:
-                full_match = None
-                area = None
+                full_match = True
+                area = 1
                 # No BBOX
                 if resample_flag:
                     raster_dataset = resample_raster(
@@ -500,7 +500,7 @@ class BaseLoaderTask(object):
         metadata["product_path"] = product_path
         self.metadata_ = metadata
         self.metadata_.update(self.raw_metadata)
-        
+
         (
             base_bands_data,
             base_bands_data_profiles,
@@ -535,7 +535,7 @@ class BaseLoaderTask(object):
             }
         )
 
-        product_id_cleaned=self._clean_product_id(product_id)
+        product_id_cleaned = self._clean_product_id(product_id)
         # check match
         match_ = [li[0] for li in _base_bands_match_]
         # Update write_suffix
@@ -563,7 +563,9 @@ class BaseLoaderTask(object):
         file_cloud = None
         # Quality Band
         if process_clouds:
-            cloud_raster = self._preprocess_clouds_mask(metadata,**{'raster_base':raster,'no_data':0})
+            cloud_raster = self._preprocess_clouds_mask(
+                metadata, **{"raster_base": raster, "no_data": 0}
+            )
             cloud_data, cloud_profile = self._get_cloud_mask(
                 cloud_raster, bbox=bbox, **kwargs
             )
@@ -582,10 +584,7 @@ class BaseLoaderTask(object):
             else:
                 file_cloud = os.path.join(
                     self.folder_proc_,
-                    product_id_cleaned
-                    + "_CLOUDS"
-                    + write_file
-                    + write_end,
+                    product_id_cleaned + "_CLOUDS" + write_file + write_end,
                 )
                 raster_cloud = write_raster(file_cloud, cloud_data, **cloud_profile)
             # clean

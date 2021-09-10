@@ -1,5 +1,4 @@
 import os
-import sys
 from subprocess import run
 import fnmatch
 import shutil
@@ -25,7 +24,6 @@ from eo_forge.utils.sentinel import (
 
 from eo_forge.utils.sentinel import SENTINEL2_BANDS_RESOLUTION
 from eo_forge.utils.utils import rem_trail_os_sep
-
 
 
 # libs
@@ -122,22 +120,22 @@ class gcSatImg(object):
     BASE_SENTINEL2 = "gs://gcp-public-data-sentinel-2/tiles/{}/{}/{}/"
     DATE_SENTINEL2 = 2
     SENTINEL_FILTERS = []
-    SENTINEL2_META="{}/MTD_MSIL1C.xml"
-    
-    def __init__(self, spacecraft="L8",boto_config=None):
-        """ purpose : init google cloud image checker
+    SENTINEL2_META = "{}/MTD_MSIL1C.xml"
+
+    def __init__(self, spacecraft="L8", boto_config=None):
+        """purpose : init google cloud image checker
 
         Parameters
         ----------
             sat: str
                 sat acronym: L8,L5, S2
             boto_config: Path or None
-                path to BOTO_CONFIG file. If None will try to 
+                path to BOTO_CONFIG file. If None will try to
                 use $HOME/.boto as location
         Returns
         -------
             None
-        
+
         """
         if spacecraft == "L8":
             self.base_url = self.BASE_LANDSAT8
@@ -157,17 +155,17 @@ class gcSatImg(object):
         self.spacecraft = spacecraft
         #
         if boto_config:
-            os.environ["BOTO_CONFIG"]=boto_config
-            self.boto_path=os.getenv["BOTO_CONFIG"]
+            os.environ["BOTO_CONFIG"] = boto_config
+            self.boto_path = os.getenv["BOTO_CONFIG"]
         else:
-            self.boto_path = Path(os.getenv('HOME'))/'.boto'
+            self.boto_path = Path(os.getenv("HOME")) / ".boto"
 
     def gcImagesCheck(self, url_filler):
-        """ purpose: gsutil command assembler for image check
+        """purpose: gsutil command assembler for image check
 
         Parameters
         -----------
-            url_filler: list 
+            url_filler: list
                 list with parameter for platforms,
                 landsat -> [path: str, row:str]
                 sentinel2 -> [UTM_ZONE:str, LATITUDE_BAND:str, GRID_SQUARE:str]
@@ -175,7 +173,7 @@ class gcSatImg(object):
         Returns
         -------
             None
-        
+
         """
         BASE_SAT = self.base_url
         URL = BASE_SAT.format(*url_filler)
@@ -197,20 +195,17 @@ class gcSatImg(object):
             self.sat_imgs = None
             self.sat_imgs_err = stderr
 
-
-    def build_metadata_path(self,base_path,prod_id):
-        """ purpouse: build metadata path based on platform
-        
-        """
+    def build_metadata_path(self, base_path, prod_id):
+        """purpouse: build metadata path based on platform"""
         if self.spacecraft != "S2":
             data_path = self.LANDSAT_META.format(base_path, prod_id)
         else:
             data_path = self.SENTINEL2_META.format(base_path)
-        
+
         return data_path
 
-    def get_clouds_from_metadata(self,file):
-        """ purpouse: get clouds coverage based on platform
+    def get_clouds_from_metadata(self, file):
+        """purpouse: get clouds coverage based on platform
 
         Parameters
         ----------
@@ -220,17 +215,16 @@ class gcSatImg(object):
         Returns
         -------
             cloud level
-        
+
         """
         if self.spacecraft != "S2":
             clouds = get_clouds_landsat(file)
         else:
             clouds = get_clouds_msil1c(file)
-        
+
         return clouds
 
-
-    def get_clouds_from_meta(self, pd_filt,remove_meta=True):
+    def get_clouds_from_meta(self, pd_filt, remove_meta=True):
         """
         :param
         """
@@ -240,12 +234,12 @@ class gcSatImg(object):
             prod_id = r["product-id"]
             bucket_path = r["base-url"]
             local_path = dir_  # to dump files
-            remote_path =self.build_metadata_path(bucket_path,prod_id)
+            remote_path = self.build_metadata_path(bucket_path, prod_id)
             #
             cmd = ["gsutil", "cp", remote_path, local_path]
             p = run(cmd, capture_output=True, text=True)
             if p.returncode == 0:
-                file_metadata = self.build_metadata_path(local_path,prod_id)
+                file_metadata = self.build_metadata_path(local_path, prod_id)
                 cloud_.append(self.clouds_from_meta(file_metadata))
                 #
                 if remove_meta:
@@ -257,8 +251,8 @@ class gcSatImg(object):
         pd_filt["clouds"] = cloud_
         return pd_filt
 
-    def make_dates_from_name(self,pd_,date_col="date"):
-        """ purpose: generate dates from files name
+    def make_dates_from_name(self, pd_, date_col="date"):
+        """purpose: generate dates from files name
 
         Parameters
         ----------
@@ -267,11 +261,12 @@ class gcSatImg(object):
 
         Returns
         -------
-            pd_: pandas dataframe 
+            pd_: pandas dataframe
                 dataframe updated
-        
+
         """
-        def split_get_datestr(x,x_idx,x_in_idx=None,x_splitter="_"):
+
+        def split_get_datestr(x, x_idx, x_in_idx=None, x_splitter="_"):
             """"""
             if x_in_idx is None:
                 return x.split(x_splitter)[x_idx]
@@ -279,24 +274,25 @@ class gcSatImg(object):
                 x_tmp = x.split(x_splitter)[x_idx]
                 return x_tmp[:x_in_idx]
 
-
         if self.spacecraft != "S2":
             pd_[date_col] = pd.to_datetime(
-                pd_["product-id"].apply(lambda x: split_get_datestr(x,self.date_idx)),
+                pd_["product-id"].apply(lambda x: split_get_datestr(x, self.date_idx)),
                 format="%Y%m%d",
             )
         else:
             pd_[date_col] = pd.to_datetime(
-                pd_["product-id"].apply(lambda x: split_get_datestr(x,self.date_idx,8)),
+                pd_["product-id"].apply(
+                    lambda x: split_get_datestr(x, self.date_idx, 8)
+                ),
                 format="%Y%m%d",
             )
 
         return pd_
 
     @staticmethod
-    def filt_dates(pd_,dates=[None,None],date_col="date"):
+    def filt_dates(pd_, dates=[None, None], date_col="date"):
         """purpouse: filt dates on dataframe
-        
+
         Parameters
         ----------
             pd_: pandas dataframe
@@ -326,27 +322,24 @@ class gcSatImg(object):
         pd_ = pd_max.copy()
         pd_.reset_index(inplace=True, drop=True)
         return pd_
-    
+
     @staticmethod
     def clean_scene_name(scene_path_dir):
-        """
-        
-        """
+        """ """
         # generic
         scene_path_dir = rem_trail_os_sep(scene_path_dir)
         # sentinel
-        scene_dir_cleaned=scene_path_dir.replace("_$folder$","")
+        scene_dir_cleaned = scene_path_dir.replace("_$folder$", "")
         #
         return scene_dir_cleaned
-    
+
     @staticmethod
     def clean_dataframe_values(pd_):
-        """
-        """
+        """ """
         nan_value = float("NaN")
         pd_.replace("", nan_value, inplace=True)
-        pd_.dropna( inplace=True)
-        pd_ret=pd_[~pd_.duplicated()]
+        pd_.dropna(inplace=True)
+        pd_ret = pd_[~pd_.duplicated()]
         return pd_ret
 
     def gcImagesFilt(
@@ -355,17 +348,17 @@ class gcSatImg(object):
         dates=[None, None],
         clouds=True,
     ):
-        """ purpouse: process images metadata obtained from gc bucket
+        """purpouse: process images metadata obtained from gc bucket
 
         Parameters
         ----------
             filters: list
                 filters to use if [] (empty list), it will not filter on name
                 if [key1,key2,etc] it will be joined as ''.join([key1,key2,etc]) and used as pattern
-                by fnmatch.fnmatch 
+                by fnmatch.fnmatch
             dates: list
                 if [None,None] data is returned as is
-                else [yyyy-mm-dd,yyyy-mm-dd] is expected   
+                else [yyyy-mm-dd,yyyy-mm-dd] is expected
             clouds: bool
                 flag to try to obtain clouds from metadata
 
@@ -374,11 +367,11 @@ class gcSatImg(object):
         if self.sat_imgs_flag:
             for scene_path_dir in self.sat_imgs:
 
-                #clean scene path
+                # clean scene path
                 scene_path_dir = self.clean_scene_name(scene_path_dir)
                 #
                 product_id = os.path.basename(scene_path_dir)
-                
+
                 if filters:
                     pattern = "".join(filters)
                     if fnmatch.fnmatch(product_id, pattern):
@@ -388,21 +381,21 @@ class gcSatImg(object):
 
             pd_ = pd.DataFrame(filtered_imgs, columns=["product-id", "base-url"])
             # clean pd from empty values
-            pd_=self.clean_dataframe_values(pd_)
+            pd_ = self.clean_dataframe_values(pd_)
             # get dates
-            pd_= self.make_dates_from_name(pd_,date_col="date")
+            pd_ = self.make_dates_from_name(pd_, date_col="date")
             #
             # filt dates
             # at this point we need a "date" column
-            pd_= self.filt_dates(pd_,dates=dates,date_col="date")
+            pd_ = self.filt_dates(pd_, dates=dates, date_col="date")
             # clouds
             if clouds:
                 pd_ = self.get_clouds_from_meta(pd_)
         else:
             if clouds:
-                pd_ = pd.DataFrame(columns=["product-id", "base-url","date","clouds"])
+                pd_ = pd.DataFrame(columns=["product-id", "base-url", "date", "clouds"])
             else:
-                pd_ = pd.DataFrame(columns=["product-id", "base-url","date"])
+                pd_ = pd.DataFrame(columns=["product-id", "base-url", "date"])
         #
         self.filt_imgs = filtered_imgs
         self.pd_filt = pd_
@@ -484,10 +477,11 @@ class bucket_images_downloader(object):
 
         return bucket_atomic, bucket_atomic_arxive
 
+    def build_datapath_sentinel2(
+        self, bucket_list=[], bucket_arxive=[], bqa_clouds=True, keep_safe=True
+    ):
+        """purpose build datapath for sentinel2
 
-    def build_datapath_sentinel2(self,bucket_list=[], bucket_arxive=[], bqa_clouds=True,keep_safe=True):
-        """ purpose build datapath for sentinel2
-        
         Parameters
         ----------
             bucket_list: list
@@ -496,64 +490,65 @@ class bucket_images_downloader(object):
                 list with local path to download
             bqa_clouds: bool
                 if cloud mas is required
-            
-        
-        
+
+
+
         Note
         PRODUCT_ID/GRANULE/{GRANULE_ID}/IMG_DATA/{IMAGE_BASE}_{BANDS}.jp2
         PRODUCT_ID/GRANULE/{GRANULE_ID}/QI_DATA/MSK_CLOUDS_B00.gml
-        
-        
+
+
         """
-        SENTINEL2_URL_BANDS="{}/GRANULE/{}/IMG_DATA/{}_{}.jp2"
-        SENTINEL2_URL_CLOUDS="{}/GRANULE/{}/QI_DATA/MSK_CLOUDS_B00.gml"
-        SENTINEL2_META="{}/MTD_MSIL1C.xml"
-        
+        SENTINEL2_URL_BANDS = "{}/GRANULE/{}/IMG_DATA/{}_{}.jp2"
+        SENTINEL2_URL_CLOUDS = "{}/GRANULE/{}/QI_DATA/MSK_CLOUDS_B00.gml"
+        SENTINEL2_META = "{}/MTD_MSIL1C.xml"
+
         if keep_safe:
-            SENTINEL2_LOCAL_BANDS="{}/GRANULE/{}/IMG_DATA/"
-            SENTINEL2_LOCAL_CLOUDS="{}/GRANULE/{}/QI_DATA/"
+            SENTINEL2_LOCAL_BANDS = "{}/GRANULE/{}/IMG_DATA/"
+            SENTINEL2_LOCAL_CLOUDS = "{}/GRANULE/{}/QI_DATA/"
         else:
-            SENTINEL2_LOCAL_BANDS="{}/"
-            SENTINEL2_LOCAL_CLOUDS="{}/"
-        
+            SENTINEL2_LOCAL_BANDS = "{}/"
+            SENTINEL2_LOCAL_CLOUDS = "{}/"
+
         bucket_atomic = []
         bucket_atomic_arxive = []
         for bi, ba in zip(bucket_list, bucket_arxive):
-            
-            
+
             bi = rem_trail_os_sep(bi)
             bi_base = os.path.basename(bi)
             # get metadatafile
-            granulei,image_basei = get_granule_from_meta_sentinel(bi)
+            granulei, image_basei = get_granule_from_meta_sentinel(bi)
             for b in self.bands:
-                bucket_atomic.append(SENTINEL2_URL_BANDS.format(bi,granulei,image_basei,b))
+                bucket_atomic.append(
+                    SENTINEL2_URL_BANDS.format(bi, granulei, image_basei, b)
+                )
                 #
                 if keep_safe:
-                    local_img_data=SENTINEL2_LOCAL_BANDS.format(ba,granulei)
+                    local_img_data = SENTINEL2_LOCAL_BANDS.format(ba, granulei)
                 else:
-                    local_img_data=SENTINEL2_LOCAL_BANDS.format(ba)
-                    
+                    local_img_data = SENTINEL2_LOCAL_BANDS.format(ba)
+
                 bucket_atomic_arxive.append(local_img_data)
                 # check local dir
                 if os.path.isdir(local_img_data):
                     pass
                 else:
-                    os.makedirs(local_img_data,exist_ok=True)
-                    
+                    os.makedirs(local_img_data, exist_ok=True)
+
             if bqa_clouds:
-                bucket_atomic.append(SENTINEL2_URL_CLOUDS.format(bi,granulei))
-                
+                bucket_atomic.append(SENTINEL2_URL_CLOUDS.format(bi, granulei))
+
                 if keep_safe:
-                    local_qi = SENTINEL2_LOCAL_CLOUDS.format(ba,granulei)
+                    local_qi = SENTINEL2_LOCAL_CLOUDS.format(ba, granulei)
                 else:
                     local_qi = SENTINEL2_LOCAL_CLOUDS.format(ba)
-                    
+
                 bucket_atomic_arxive.append(local_qi)
-                
+
                 if os.path.isdir(local_qi):
                     pass
                 else:
-                    os.makedirs(local_qi,exist_ok=True)
+                    os.makedirs(local_qi, exist_ok=True)
 
             bucket_atomic.append(SENTINEL2_META.format(bi))
             bucket_atomic_arxive.append(ba)
@@ -615,4 +610,3 @@ class bucket_images_downloader(object):
             t.setDaemon(True)
             t.start()
         q.join()
-

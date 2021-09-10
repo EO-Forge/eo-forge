@@ -11,7 +11,7 @@ import geopandas as gpd
 from eo_forge.utils.raster_utils import (
     get_is_valid_mask,
     shapes2array,
-    write_mem_raster
+    write_mem_raster,
 )
 from eo_forge.utils.sentinel import (
     calibrate_sentinel2,
@@ -25,19 +25,19 @@ from eo_forge.io.GenLoader import BaseLoaderTask
 ######################################################################
 
 
-def s2_cloud_preproc(base_dir,dump_file=None):
+def s2_cloud_preproc(base_dir, dump_file=None):
     """
     Read cloud mask file as geodataframe and write to disk (if necessary)
     :param dump_file: file to be written (if None, just return the
     geodataframe)
     """
-    
-    _,_,g = walk_dir_files(base_dir,cases=['MSK_CLOUDS_B00.gml'])
 
-    if 'MSK_CLOUDS_B00.gml' in g:
-        mask_cloud_file_=g['MSK_CLOUDS_B00.gml'][0]
+    _, _, g = walk_dir_files(base_dir, cases=["MSK_CLOUDS_B00.gml"])
+
+    if "MSK_CLOUDS_B00.gml" in g:
+        mask_cloud_file_ = g["MSK_CLOUDS_B00.gml"][0]
     else:
-        mask_cloud_file_= None
+        mask_cloud_file_ = None
 
     gpd_ = None
 
@@ -53,10 +53,9 @@ def s2_cloud_preproc(base_dir,dump_file=None):
                 gpd_.to_file(dump_file)
             return gpd_
         except:  # noqa
-            print(
-                f"FAILED to read/dump file: {mask_cloud_file_}"
-            )
+            print(f"FAILED to read/dump file: {mask_cloud_file_}")
             return None
+
 
 class Sentinel2Loader(BaseLoaderTask):
     """Task for importing Sentinel SAFE data into a Single Raster (and Clouds File)."""
@@ -159,7 +158,7 @@ class Sentinel2Loader(BaseLoaderTask):
                 safe_dir_timestamp, "%Y%m%dT%H%M%S"
             )
 
-        self.raw_metadata=metadata
+        self.raw_metadata = metadata
         return metadata
 
     def _get_product_path(self, product_id):
@@ -173,10 +172,8 @@ class Sentinel2Loader(BaseLoaderTask):
         return os.path.join(self.archive_folder, sub_dirs, product_id)
 
     def _clean_product_id(self, product_id):
-        """ purpose: clean product id from extensions
-        """
-        return product_id.replace(".SAFE","")
-
+        """purpose: clean product id from extensions"""
+        return product_id.replace(".SAFE", "")
 
     def post_process_band(self, raster, band):
         """
@@ -205,22 +202,17 @@ class Sentinel2Loader(BaseLoaderTask):
     def _preprocess_clouds_mask(self, metadata, **kwargs):
         """Return Raster BQA"""
 
-
-        raster_base=kwargs['raster_base']
-        nodata=kwargs['no_data']
-        base_dir = metadata['product_path']
+        raster_base = kwargs["raster_base"]
+        nodata = kwargs["no_data"]
+        base_dir = metadata["product_path"]
 
         gpd_ = s2_cloud_preproc(base_dir)
         if gpd_ is None:
             array_ = np.zeros((raster_base.height, raster_base.width), dtype=rio.uint8)
-                
+
         else:
             array_ = shapes2array(gpd_, raster_base)
 
-        profile=raster_base.profile.copy()
-        profile.update({ 
-        "count":1,
-        "nodata":nodata
-        })
-        return write_mem_raster(array_[np.newaxis,...],**profile)
-
+        profile = raster_base.profile.copy()
+        profile.update({"count": 1, "nodata": nodata})
+        return write_mem_raster(array_[np.newaxis, ...], **profile)

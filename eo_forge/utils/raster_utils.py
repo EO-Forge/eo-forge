@@ -598,6 +598,7 @@ def get_raster_data_and_profile(raster):
     """
     return raster.read(), raster.profile
 
+
 def shapes2array(shapes, raster):
     """set shapes to raster
     Parameters

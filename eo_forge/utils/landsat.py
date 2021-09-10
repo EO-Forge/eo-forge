@@ -38,9 +38,8 @@ LANDSAT5_BANDS_RESOLUTION = OrderedDict(
 LANDSAT_SUPPORTED_RESOLUTIONS = (30, 60, 90, 120)
 
 
-
 def get_clouds_landsat(file):
-    """ purpouse: to read cloud image level from landsat metadata file
+    """purpouse: to read cloud image level from landsat metadata file
 
     Parameters
     ----------
@@ -50,7 +49,7 @@ def get_clouds_landsat(file):
     Returns
     -------
         cloud level
-    
+
     """
     with open(file, "r") as f:
         lines = f.readlines()
@@ -114,12 +113,12 @@ def calibrate_landsat5(
     raster:
         raster instance opened by rasterio
     band: str
-        Landsat8 band
+        Landsat 5 band
     metadata: dict
-        Landsat 8 metadata parsed file
+        Landsat 5 metadata parsed file
     reflectance: bool
-        If True get radiance else reflectance
-        (REF-TOA B1-9 / TOA Brightness Temperature B10-11)
+        If True get reflectance else radiance
+        (REF-TOA B1-5,7 / TOA Brightness Temperature B6)
     close: bool
         Close the input raster dataset before returning the calibrated raster.
     Returns
