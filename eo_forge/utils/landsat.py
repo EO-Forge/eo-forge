@@ -1,7 +1,63 @@
 import numpy as np
 import rasterio as rio
+from collections import OrderedDict
 
 from eo_forge.utils.raster_utils import write_mem_raster
+
+
+###############################
+# Landsat General definitions
+# Also define a default ordering for the bands.
+LANDSAT8_BANDS_RESOLUTION = OrderedDict(
+    B1=30,
+    B2=30,
+    B3=30,
+    B4=30,
+    B5=30,
+    B6=30,
+    B7=30,
+    B8=15,
+    B9=30,
+    B10=100,
+    B11=100,
+)
+
+# Landsat5 Bands resolution in meters
+# Also define a default ordering for the bands.
+LANDSAT5_BANDS_RESOLUTION = OrderedDict(
+    B1=30,
+    B2=30,
+    B3=30,
+    B4=30,
+    B5=30,
+    B6=30,  # 120m but resampled to 30
+    B7=30,
+)
+
+# Resolutions in meters for landsat 5 and 8
+LANDSAT_SUPPORTED_RESOLUTIONS = (30, 60, 90, 120)
+
+
+def get_clouds_landsat(file):
+    """purpouse: to read cloud image level from landsat metadata file
+
+    Parameters
+    ----------
+        file: path
+            path to metadata file
+
+    Returns
+    -------
+        cloud level
+
+    """
+    with open(file, "r") as f:
+        lines = f.readlines()
+    cloud = None
+    for line in lines:
+        if "CLOUD_COVER_LAND" in line:
+            cloud = line.split("=")[1].replace("\n", "").strip()
+    return cloud
 
 
 def calibrate_landsat_bqa(
@@ -57,12 +113,12 @@ def calibrate_landsat5(
     raster:
         raster instance opened by rasterio
     band: str
-        Landsat8 band
+        Landsat 5 band
     metadata: dict
-        Landsat 8 metadata parsed file
+        Landsat 5 metadata parsed file
     reflectance: bool
-        If True get radiance else reflectance
-        (REF-TOA B1-9 / TOA Brightness Temperature B10-11)
+        If True get reflectance else radiance
+        (REF-TOA B1-5,7 / TOA Brightness Temperature B6)
     close: bool
         Close the input raster dataset before returning the calibrated raster.
     Returns
@@ -112,12 +168,8 @@ def calibrate_landsat5(
         data = (data - QMin) * dL / dQ + LMin
 
         if band != "B6":
-            zA = np.radians(
-                90 - float(metadata["IMAGE_ATTRIBUTES"]["SUN_ELEVATION"])
-            )
-            es_distance = float(
-                metadata["IMAGE_ATTRIBUTES"]["EARTH_SUN_DISTANCE"]
-            )
+            zA = np.radians(90 - float(metadata["SUN_ELEVATION"]))
+            es_distance = float(metadata["EARTH_SUN_DISTANCE"])
             esun_band = esun[band]
             data = data * np.pi * es_distance ** 2 / (esun_band * np.cos(zA))
 

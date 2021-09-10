@@ -9,6 +9,7 @@ import rasterio.mask as rasterio_mask
 from geopandas import GeoDataFrame
 from rasterio import Affine, MemoryFile
 from rasterio import crs as rasterio_crs
+from rasterio.features import rasterize
 from rasterio.enums import Resampling
 from rasterio.warp import (
     transform as rasterio_transform,
@@ -50,14 +51,14 @@ def bbox_from_raster(rasterio_dataset, epsg=4326):
 
 
 def clip_raster(
-        raster,
-        bbox,
-        enable_transform=True,
-        close=False,
-        crop=True,
-        nodata=0,
-        all_touched=True,
-        hard_bbox=False,
+    raster,
+    bbox,
+    enable_transform=True,
+    close=False,
+    crop=True,
+    nodata=0,
+    all_touched=True,
+    hard_bbox=False,
 ):
     """
     Clip raster to provided BBox.
@@ -161,8 +162,7 @@ def reproject_raster_to_bbox(raster, roi_bbox, close=False):
 
     left, bottom, right, top = roi_bbox.bounds.values[0]
     window = rio.windows.from_bounds(
-        transform=raster.transform, left=left,
-        bottom=bottom, right=right, top=top
+        transform=raster.transform, left=left, bottom=bottom, right=right, top=top
     )
     raster_data = raster.read()
     width = int(window.width)
@@ -170,9 +170,7 @@ def reproject_raster_to_bbox(raster, roi_bbox, close=False):
     new_data_shape = (raster_data.shape[0], height, width)
     reprojected_data = np.zeros(new_data_shape, raster_data.dtype)
 
-    dst_transform = rio.windows.transform(
-        window, raster.transform
-    )
+    dst_transform = rio.windows.transform(window, raster.transform)
     rasterio_reproject(
         raster_data,
         reprojected_data,
@@ -180,7 +178,7 @@ def reproject_raster_to_bbox(raster, roi_bbox, close=False):
         src_crs=raster.crs,
         dst_transform=dst_transform,
         dst_crs=raster.crs,
-        resampling=Resampling.bilinear
+        resampling=Resampling.bilinear,
     )
     profile = raster.profile.copy()
     profile.update(
@@ -316,9 +314,7 @@ def check_shape_match(raster, bbox, enable_transform=True):
         area = 1
     elif intersect_:
         full_match = False
-        area = (
-                raster_polygon.intersection(roi_geometry).area / roi_geometry.area
-        )
+        area = raster_polygon.intersection(roi_geometry).area / roi_geometry.area
     else:
         full_match = None
         area = 0
@@ -383,9 +379,7 @@ def resample_raster(raster, scale, close=False):
     width = int(raster.width / scale)
 
     profile = raster.profile
-    profile.update(
-        transform=transform, driver="GTiff", height=height, width=width
-    )
+    profile.update(transform=transform, driver="GTiff", height=height, width=width)
 
     data = raster.read(
         out_shape=(raster.count, height, width),
@@ -406,16 +400,14 @@ def write_mem_raster(data, **profile):
 
 
 def write_raster(file_path, data, **profile):
-    with rio.open(
-            file_path, "w", **profile
-    ) as dataset:  # Open as DatasetWriter
+    with rio.open(file_path, "w", **profile) as dataset:  # Open as DatasetWriter
         dataset.write(data)
 
     return rio.open(file_path)  # Reopen as DatasetReader
 
 
 def check_raster_clip_crs(
-        raster_dataset, roi_bbox, enable_transform=True, verbose=False
+    raster_dataset, roi_bbox, enable_transform=True, verbose=False
 ):
     """check band crs match to provided bbox
         Parameters
@@ -466,9 +458,7 @@ def check_raster_shape_match(raster, roi_shape, enable_transform=True):
         area = 1
     elif intersect_:
         full_match = False
-        area = (
-                raster_polygon.intersection(roi_geometry).area / roi_geometry.area
-        )
+        area = raster_polygon.intersection(roi_geometry).area / roi_geometry.area
     else:
         full_match = None
         area = 0
@@ -476,7 +466,16 @@ def check_raster_shape_match(raster, roi_shape, enable_transform=True):
 
 
 def get_nodata_mask(raster_dataset, nodata=0, out_path=None):
-    """get_nodata mask"""
+    """get_nodata_mask from raster by filtering values
+    Parameters
+    ----------
+        raster: raster instance (rasterio open)
+        nodata: value
+        out_path: file path (optional, else return in memory)
+    Return
+    ------
+        in-memory raster mask or wrtitten to disk
+    """
     # as numpy (NxM)
     data = raster_dataset.read()
     mask = np.where(data == nodata, True, False).astype(rio.uint8)
@@ -495,7 +494,16 @@ def get_nodata_mask(raster_dataset, nodata=0, out_path=None):
 
 
 def apply_nodata_mask(raster_dataset, raster_mask, nodata=0, out_path=None):
-    """"""
+    """apply_nodata_mask to raster
+    Parameters
+    ----------
+        raster: raster instance (rasterio open)
+        raster mask: raster instance (rasterio open)
+        out_path: file path (optional, else return in memory)
+    Return
+    ------
+        in-memory raster mask or written to disk
+    """
     data = raster_dataset.read()
     mask = raster_mask.read(1)
     data_masked = []
@@ -517,13 +525,52 @@ def apply_nodata_mask(raster_dataset, raster_mask, nodata=0, out_path=None):
         return write_raster(out_path, data, **profile)
 
 
+def apply_isvalid_mask(raster_dataset, raster_mask, nodata=0, out_path=None):
+    """apply_isvalid_mask to raster
+    Parameters
+    ----------
+        raster: raster instance (rasterio open)
+        raster mask: raster instance (rasterio open)
+        out_path: file path (optional, else return in memory)
+    Return
+    ------
+        in-memory raster mask or written to disk
+    """
+    data = raster_dataset.read()
+    mask = raster_mask.read(1)
+    data_masked = []
+    for i, band in enumerate(data, 1):
+        data_masked.append(np.where(mask > 0, band, nodata))
+
+    data = np.stack(data_masked, axis=0)
+
+    profile = raster_dataset.profile.copy()
+    profile.update(
+        {
+            "nodata": nodata,
+        }
+    )
+
+    if out_path is None:
+        return write_mem_raster(data, **profile)
+    else:
+        return write_raster(out_path, data, **profile)
+
+
 def get_is_valid_mask(raster_dataset, filter_values=(0, 0), out_path=None):
-    """get_nodata mask"""
+    """get_is_valid_mask from raster by filtering values
+    Parameters
+    ----------
+        raster: raster instance (rasterio open)
+        filter_values: tuple
+        out_path: file path (optional, else return in memory)
+    Return
+    ------
+        in-memory raster mask or wrtitten to disk
+    """
     # as numpy (NxM)
     data = raster_dataset.read()
-    mask = ((data != filter_values[0]) & (data != filter_values[1])).astype(
-        rio.ubyte
-    )
+    mask = ((data != filter_values[0]) & (data != filter_values[1])).astype(rio.ubyte)
     profile = raster_dataset.profile.copy()
     profile.update(
         {
@@ -536,3 +583,38 @@ def get_is_valid_mask(raster_dataset, filter_values=(0, 0), out_path=None):
         return write_mem_raster(mask, **profile)
     else:
         return write_raster(out_path, mask, **profile)
+
+
+def get_raster_data_and_profile(raster):
+    """get raster data and profile
+    Parameters
+    ----------
+        raster: raster instance (rasterio open)
+
+    Return
+    ------
+        raster.read()
+        raster.profile
+    """
+    return raster.read(), raster.profile
+
+
+def shapes2array(shapes, raster):
+    """set shapes to raster
+    Parameters
+    ----------
+        shapes: geodataframe
+
+    """
+
+    # read geometries
+    gpd_ = shapes
+    array_ = rasterize(
+        gpd_.geometry.values,
+        out_shape=(raster.height, raster.width),
+        fill=0,
+        transform=raster.transform,
+        default_value=1,
+        dtype=rio.uint8,
+    )
+    return array_
