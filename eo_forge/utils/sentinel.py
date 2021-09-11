@@ -1,3 +1,15 @@
+"""
+Sentinel2 helper functions
+==========================
+
+.. autosummary::
+    :toctree: ../generated/
+
+    calibrate_sentinel2
+    get_granule_from_meta_sentinel
+    get_sentinel_granule_img
+    get_clouds_msil1c
+"""
 import numpy as np
 import shutil
 import os
@@ -31,18 +43,18 @@ SENTINEL2_SUPPORTED_RESOLUTIONS = (10, 20, 60, 120)  # in meters
 
 
 def get_clouds_msil1c(file):
-    """purpouse: get clouds from metadata file "MTD_MSIL1C.xml"
+    """
+    Get clouds from metadata file "MTD_MSIL1C.xml".
 
     Parameters
     ----------
-        file: path
-            path to metadata file
+    file: path
+        path to metadata file
 
     Returns
     -------
-        clouds: float
-            clouds as % ([0,100] scale)
-
+    clouds: float
+        clouds as % ([0,100] scale)
     """
 
     tree = etree.parse(file)
@@ -58,18 +70,18 @@ def get_clouds_msil1c(file):
 
 
 def get_sentinel_granule_img(metadata_file):
-    """purpose: get granule id and image id from sentinel2 l1c products
+    """
+    Get granule id and image id from sentinel2 l1c products.
 
     Parameters
     ----------
-        metadata_file: str
-            path to sentinel2 l1c metadata file
+    metadata_file: str
+        path to sentinel2 l1c metadata file
 
     Returns
     -------
-        granule_id: str
-        image_id:str
-
+    granule_id: str
+    image_id:str
     """
     tree = etree.parse(metadata_file)
     root = tree.getroot()
@@ -82,20 +94,20 @@ def get_sentinel_granule_img(metadata_file):
 
 
 def get_granule_from_meta_sentinel(base_dir):
-    """purpose: get granule id and image base for a sentinel2 L1C image
+    """
+    Get granule id and image base for a sentinel2 L1C image.
 
     Parameters
     ----------
-        base_dir: url
-            gcp image url
+    base_dir: url
+        gcp image url
 
     Returns
     -------
-        granule: str
-            granule id from base dir
-        image_base: str
-            image base
-
+    granule: str
+        granule id from base dir
+    image_base: str
+        image base
     """
     SENTINEL2_META = "{}/MTD_MSIL1C.xml"
     # make temp
@@ -118,7 +130,9 @@ def calibrate_sentinel2(
     metadata,
     close=False,
 ):
-    """Calibrate Sentinel 2
+    """
+    Calibrate Sentinel 2.
+
     Parameters
     ----------
     raster:
@@ -130,7 +144,7 @@ def calibrate_sentinel2(
 
     Returns
     -------
-    returns a DatasetReader instance from a MemoryFile.
+    Returns a DatasetReader instance from a MemoryFile.
     """
     profile = raster.profile
     data = raster.read() / metadata["quantification_value"]

@@ -1,4 +1,12 @@
-# -*- coding: utf-8 -*-
+"""
+Generic loaders module
+======================
+
+.. autosummary::
+    :toctree: ../generated/
+
+    BaseGenericLoader
+"""
 import gc
 import os
 import warnings
@@ -22,9 +30,16 @@ from eo_forge.utils.raster_utils import (
 )
 from eo_forge.utils.shapes import bbox_to_geodataframe, set_buffer_on_gdf
 
-###############################
-class BaseLoaderTask(object):
-    """Base class for Landsat and Sentinel loaders."""
+
+class BaseGenericLoader:
+    """
+    Base class for Landsat and Sentinel loaders.
+
+    This class can only load data from a local storage (your laptop storage, a NFS storage,etc).
+    The functionality to read directly from Cloud Buckets is not yet implemented.
+
+    The particular raw data files are looked inside the archive folder based on their product ID.
+    """
 
     _supported_resolutions = tuple()
     _ordered_bands = tuple()
@@ -44,7 +59,7 @@ class BaseLoaderTask(object):
         Parameters
         ----------
         folder : str
-            Path to the folder with the Landsat raw data.
+            Path to the folder with the raw data.
         resolution: int
             Desired resolution.
         bands: iterable
@@ -88,36 +103,26 @@ class BaseLoaderTask(object):
 
     @abstractmethod
     def _read_metadata(self, product_path):
-        """
-        Returns a dictionary with the product metadata.
-        """
+        """Returns a dictionary with the product metadata."""
         raise NotImplementedError
 
     def post_process_band(self, raster, band):
-        """
-        Postprocess the band data (ndarray).
-        """
+        """Postprocess the band data (ndarray input)."""
         return raster
 
     @abstractmethod
     def _clean_product_id(self, product_id):
-        """
-        Cleans product id
-        """
+        """Cleans product id."""
         raise NotImplementedError
 
     @abstractmethod
     def _get_is_valid_data(self, raster):
-        """
-        Returns raster mask with valid data
-        """
+        """Returns raster mask with valid data."""
         raise NotImplementedError
 
     @abstractmethod
     def _preprocess_clouds_mask(self, product_path, **kwargs):
-        """
-        Returns raster cloud mask
-        """
+        """Returns raster cloud mask."""
         raise NotImplementedError
 
     def _get_bands_data(
@@ -126,7 +131,7 @@ class BaseLoaderTask(object):
         **kwargs,
     ):
         """
-        Gets bands data.
+        Gets data for different bands.
 
         Parameters
         ----------
@@ -449,18 +454,29 @@ class BaseLoaderTask(object):
         self,
         product_id=None,
         process_clouds=True,
-        write_file=None,  # if not None, will be used as write suffix (before  file extension)
+        write_file=None,
         raster_return_open=False,
         folder_proc_="./",
         **kwargs,
     ):
         """
-        Implement the base execute function for the loaders.
+        Base execute function for the loaders.
+
+        This function loads from a local archive, the data for a given product ID.
 
         Parameters
         ----------
         product_id: str
             Tile product ID or name of the subfolder with the tile data.
+        process_clouds: bool
+            Read cloud mask from the quality data.
+        write_file: str
+            If not None, will be used as write suffix (before  file extension) for saving the
+            processed data into a file.
+        raster_return_open: bool
+            If True, the opened rasterio dataset is returned in the results dictionary.
+        folder_proc_: str
+            Path to the folder where the processed data is saved if write_file is not None.
 
         Other parameters
         ----------------

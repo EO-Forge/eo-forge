@@ -1,4 +1,13 @@
-# -*- coding: utf-8 -*-
+"""
+Lansat loaders module
+=====================
+
+.. autosummary::
+    :toctree: ../generated/
+
+    LandsatLoader
+"""
+
 import glob
 import os
 import warnings
@@ -18,13 +27,18 @@ from eo_forge.utils.raster_utils import (
     get_is_valid_mask,
 )
 
-from eo_forge.io.GenLoader import BaseLoaderTask
-
-###############################
+from eo_forge.io.GenLoader import BaseGenericLoader
 
 
-class LandsatLoader(BaseLoaderTask):
-    """Task for Loading Landsat5 and Landsat8 images into a single raster file (and cloud file)"""
+class LandsatLoader(BaseGenericLoader):
+    """
+    Class for Loading Landsat5 and Landsat8 images into a single raster file (and cloud file)
+
+    This class can only load data from a local storage (your laptop storage, a NFS storage,etc).
+    The functionality to read directly from Cloud Buckets is not yet implemented.
+
+    The particular raw data files are looked inside the archive folder based on their product ID.
+    """
 
     _supported_resolutions = LANDSAT_SUPPORTED_RESOLUTIONS
     _rasterio_driver = "GTiff"
@@ -51,6 +65,8 @@ class LandsatLoader(BaseLoaderTask):
             Landsat spacecraft (5 or 8).
         bands: iterable
             List of bands to process
+        reflectance: bool
+             If True load data as "reflectance", otherwise as "radiance".
         """
         if spacecraft not in (5, 8):
             raise ValueError(
@@ -165,10 +181,11 @@ class LandsatLoader(BaseLoaderTask):
         return os.path.join(self.archive_folder, sub_dirs, product_id)
 
     def _clean_product_id(self, product_id):
-        """purpose: clean product id from extensions"""
+        """purpose: clean product id from extensions."""
         return product_id
 
     def post_process_band(self, raster, band):
+        """Postprocess the band data (calibration)."""
         if band.upper() == "BQA":
             return calibrate_landsat_bqa(raster, self._filter_values, close=True)
         else:
@@ -177,11 +194,11 @@ class LandsatLoader(BaseLoaderTask):
             )
 
     def _get_is_valid_data(self, raster):
-        """"""
+        """Returns raster mask with valid data."""
         return get_is_valid_mask(raster, filter_values=[0, 0])
 
     def _preprocess_clouds_mask(self, metadata, band="BQA", **kwargs):
-        """Return Raster BQA"""
+        """Return Raster BQA."""
 
         band = band.upper()
         data_file = metadata["band_files"][band]

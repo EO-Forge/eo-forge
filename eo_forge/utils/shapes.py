@@ -1,3 +1,13 @@
+"""
+Helper functions for Bounding boxs
+==================================
+
+.. autosummary::
+    :toctree: ../generated/
+
+    bbox_to_geodataframe
+    set_buffer_on_gdf
+"""
 import geopandas as gpd
 
 
@@ -12,19 +22,19 @@ def bbox_to_geodataframe(bbox):
 def set_buffer_on_gdf(
     gdf, buffer=50, convex_hull=True, to_epsg_=True, epsg_="EPSG:3857"
 ):
-    """set buffer and simplify (convexhull) geometry
+    """
+    Set buffer and simplify (convexhull) geometry.
 
     Parameters
     ----------
-
-        gdf: geopandas instance on a projected crs
-        buffer: buffer to apply in meters
-        convex_hull: bool to apply convex hull simplification or not
-        epsg_: epsg to be used in buffering (notice that buffer works with a projected crs)
+    gdf: geopandas instance on a projected crs
+    buffer: buffer to apply in meters
+    convex_hull: bool to apply convex hull simplification or not
+    epsg\_: epsg to be used in buffering (notice that buffer works with a projected crs)
 
     Returns
     -------
-        gdf: updated geoDataframe
+    gdf: updated geoDataframe
     """
     gdf_ = gdf.copy()
 

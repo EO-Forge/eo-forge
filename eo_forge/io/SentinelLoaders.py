@@ -1,4 +1,12 @@
-# -*- coding: utf-8 -*-
+"""
+Sentinel loaders module
+=======================
+.. autosummary::
+    :toctree: ../generated/
+
+    Sentinel2Loader
+    s2_cloud_preproc
+"""
 import glob
 import os
 from datetime import datetime
@@ -20,7 +28,8 @@ from eo_forge.utils.sentinel import (
 )
 
 from eo_forge.utils.utils import walk_dir_files
-from eo_forge.io.GenLoader import BaseLoaderTask
+from eo_forge.io.GenLoader import BaseGenericLoader
+
 
 ######################################################################
 
@@ -57,8 +66,15 @@ def s2_cloud_preproc(base_dir, dump_file=None):
             return None
 
 
-class Sentinel2Loader(BaseLoaderTask):
-    """Task for importing Sentinel SAFE data into a Single Raster (and Clouds File)."""
+class Sentinel2Loader(BaseGenericLoader):
+    """
+    Class for Loading Sentinel SAFE data into a single raster file (and cloud file)
+
+    This class can only load data from a local storage (your laptop storage, a NFS storage,etc).
+    The functionality to read directly from Cloud Buckets is not yet implemented.
+
+    The particular raw data files are looked inside the archive folder based on their product ID.
+    """
 
     _supported_resolutions = SENTINEL2_SUPPORTED_RESOLUTIONS
     _ordered_bands = tuple(SENTINEL2_BANDS_RESOLUTION.keys())
@@ -172,13 +188,11 @@ class Sentinel2Loader(BaseLoaderTask):
         return os.path.join(self.archive_folder, sub_dirs, product_id)
 
     def _clean_product_id(self, product_id):
-        """purpose: clean product id from extensions"""
+        """Clean product id from extensions"""
         return product_id.replace(".SAFE", "")
 
     def post_process_band(self, raster, band):
-        """
-        Returns the calibrated Sentinel 2 Images to TOA-REF
-        """
+        """Returns the calibrated Sentinel 2 Images to TOA-REF."""
         if band.upper() == "BQA":
             return raster
         else:
@@ -190,7 +204,7 @@ class Sentinel2Loader(BaseLoaderTask):
             )
 
     def _get_is_valid_data(self, raster):
-        """"""
+        """Returns raster mask with valid data."""
         return get_is_valid_mask(
             raster,
             filter_values=[
@@ -200,7 +214,7 @@ class Sentinel2Loader(BaseLoaderTask):
         )
 
     def _preprocess_clouds_mask(self, metadata, **kwargs):
-        """Return Raster BQA"""
+        """Return Raster BQA."""
 
         raster_base = kwargs["raster_base"]
         nodata = kwargs["no_data"]

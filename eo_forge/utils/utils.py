@@ -1,3 +1,13 @@
+"""
+General helper functions
+========================
+
+.. autosummary::
+    :toctree: ../generated/
+
+    rem_trail_os_sep
+    walk_dir_files
+"""
 import os
 import glob
 import fnmatch
@@ -12,9 +22,12 @@ def rem_trail_os_sep(scene_path_dir):
 
 def walk_dir_files(target_base_path_, cases=["*.i", "*.o", "*.r"]):
     """
-    get dir and files from a target_path
-    :param target_base_path_: base path that will be check by os.walk
-    :param cases: wild card extension to be checked in files (generates a dictionary)
+    Get dir and files from a target_path.
+
+    Paramters
+    ---------
+    target_base_path_: base path that will be check by os.walk
+    cases: wild card extension to be checked in files (generates a dictionary)
     """
     IO_files_ = []
     IO_dirs_ = []

@@ -1,3 +1,16 @@
+"""
+Downloader module
+==================
+
+.. autosummary::
+    :toctree: ../generated/
+
+    bucket_downloader
+    gcSatImg
+    ThreadUrlDownload
+    bucket_images_downloader
+"""
+
 import os
 from subprocess import run
 import fnmatch
@@ -30,7 +43,11 @@ from eo_forge.utils.utils import rem_trail_os_sep
 from .logger import update_logger
 
 
-class bucket_downloader(object):
+class bucket_downloader:
+    """
+    Downloader Sentinel or Landasat data from a Google Cloud bucket.
+    """
+
     def __init__(self, logger=None):
         """
         :param logger=None
@@ -108,7 +125,10 @@ class bucket_downloader(object):
                     )
 
 
-class gcSatImg(object):
+class gcSatImg:
+    """
+    Google cloud definitions and path generators.
+    """
 
     BASE_LANDSAT8 = "gs://gcp-public-data-landsat/LC08/01/{}/{}/"
     BASE_LANDSAT5 = "gs://gcp-public-data-landsat/LT05/01/{}/{}/"
@@ -123,19 +143,20 @@ class gcSatImg(object):
     SENTINEL2_META = "{}/MTD_MSIL1C.xml"
 
     def __init__(self, spacecraft="L8", boto_config=None):
-        """purpose : init google cloud image checker
+        """
+        Initialize the google cloud image checker
 
         Parameters
         ----------
-            sat: str
-                sat acronym: L8,L5, S2
-            boto_config: Path or None
-                path to BOTO_CONFIG file. If None will try to
-                use $HOME/.boto as location
+        sat: str
+            sat acronym: L8,L5, S2
+        boto_config: Path or None
+            path to BOTO_CONFIG file. If None will try to
+            use $HOME/.boto as location
+
         Returns
         -------
-            None
-
+        None
         """
         if spacecraft == "L8":
             self.base_url = self.BASE_LANDSAT8
@@ -150,10 +171,10 @@ class gcSatImg(object):
             self.date_idx = self.DATE_SENTINEL2
             self.clouds_from_meta = get_clouds_msil1c
         else:
-            raise ("EITHER L8,L5,S2")
+            raise ValueError("EITHER L8,L5,S2")
 
         self.spacecraft = spacecraft
-        #
+
         if boto_config:
             os.environ["BOTO_CONFIG"] = boto_config
             self.boto_path = os.getenv["BOTO_CONFIG"]
@@ -161,18 +182,19 @@ class gcSatImg(object):
             self.boto_path = Path(os.getenv("HOME")) / ".boto"
 
     def gcImagesCheck(self, url_filler):
-        """purpose: gsutil command assembler for image check
+        """
+        gsutil command assembler for image checking.
 
         Parameters
         -----------
-            url_filler: list
-                list with parameter for platforms,
-                landsat -> [path: str, row:str]
-                sentinel2 -> [UTM_ZONE:str, LATITUDE_BAND:str, GRID_SQUARE:str]
+        url_filler: list
+            list with parameter for platforms,
+            landsat -> [path: str, row:str]
+            sentinel2 -> [UTM_ZONE:str, LATITUDE_BAND:str, GRID_SQUARE:str]
 
         Returns
         -------
-            None
+        None
 
         """
         BASE_SAT = self.base_url
@@ -196,7 +218,7 @@ class gcSatImg(object):
             self.sat_imgs_err = stderr
 
     def build_metadata_path(self, base_path, prod_id):
-        """purpouse: build metadata path based on platform"""
+        """Build metadata path based on platform."""
         if self.spacecraft != "S2":
             data_path = self.LANDSAT_META.format(base_path, prod_id)
         else:
@@ -205,17 +227,17 @@ class gcSatImg(object):
         return data_path
 
     def get_clouds_from_metadata(self, file):
-        """purpouse: get clouds coverage based on platform
+        """
+        Get clouds coverage based on platform/
 
         Parameters
         ----------
-            file: path
-                path to file
+        file: path
+            path to file
 
         Returns
         -------
-            cloud level
-
+        cloud level
         """
         if self.spacecraft != "S2":
             clouds = get_clouds_landsat(file)
@@ -226,7 +248,7 @@ class gcSatImg(object):
 
     def get_clouds_from_meta(self, pd_filt, remove_meta=True):
         """
-        :param
+        Get cloud file from metadata.
         """
         dir_ = mkdtemp()
         cloud_ = []
@@ -252,18 +274,17 @@ class gcSatImg(object):
         return pd_filt
 
     def make_dates_from_name(self, pd_, date_col="date"):
-        """purpose: generate dates from files name
+        """Generate dates from files name.
 
         Parameters
         ----------
-            pd_: pandas Dataframe
-                pandas dataframe with files
+        pd_: pandas Dataframe
+            Pandas dataframe with file list.
 
         Returns
         -------
-            pd_: pandas dataframe
-                dataframe updated
-
+        pd_: pandas dataframe
+            Updated dataframe
         """
 
         def split_get_datestr(x, x_idx, x_in_idx=None, x_splitter="_"):
@@ -291,22 +312,23 @@ class gcSatImg(object):
 
     @staticmethod
     def filt_dates(pd_, dates=[None, None], date_col="date"):
-        """purpouse: filt dates on dataframe
+        """
+        Filter dates on dataframe.
 
         Parameters
         ----------
-            pd_: pandas dataframe
-                dataframe instance with data to filt
-            dates: list
-                if [None,None] dataframe is returned as is
-                else [yyyy-mm-dd,yyyy-mm-dd] is expected
-            date_col: str
-                date column name on pd_
+        pd_: pandas dataframe
+            dataframe instance with data to filt
+        dates: list
+            if [None,None] dataframe is returned as is
+            else [yyyy-mm-dd,yyyy-mm-dd] is expected
+        date_col: str
+            date column name on pd_
 
         Returns
         -------
-            pd_: pandas dataframe
-                filtered dataframe (or original is dates is None)
+        pd_: pandas dataframe
+            filtered dataframe (or original is dates is None)
         """
         # filt dates
         if dates[0]:
@@ -325,7 +347,7 @@ class gcSatImg(object):
 
     @staticmethod
     def clean_scene_name(scene_path_dir):
-        """ """
+        """Clean scene name."""
         # generic
         scene_path_dir = rem_trail_os_sep(scene_path_dir)
         # sentinel
@@ -335,7 +357,7 @@ class gcSatImg(object):
 
     @staticmethod
     def clean_dataframe_values(pd_):
-        """ """
+        """Remove NaN values from dataframe."""
         nan_value = float("NaN")
         pd_.replace("", nan_value, inplace=True)
         pd_.dropna(inplace=True)
@@ -348,20 +370,19 @@ class gcSatImg(object):
         dates=[None, None],
         clouds=True,
     ):
-        """purpouse: process images metadata obtained from gc bucket
+        """Process images metadata obtained from gc bucket.
 
         Parameters
         ----------
-            filters: list
-                filters to use if [] (empty list), it will not filter on name
-                if [key1,key2,etc] it will be joined as ''.join([key1,key2,etc]) and used as pattern
-                by fnmatch.fnmatch
-            dates: list
-                if [None,None] data is returned as is
-                else [yyyy-mm-dd,yyyy-mm-dd] is expected
-            clouds: bool
-                flag to try to obtain clouds from metadata
-
+        filters: list
+            filters to use if [] (empty list), it will not filter on name
+            if [key1,key2,etc] it will be joined as ''.join([key1,key2,etc]) and used as pattern
+            by fnmatch.fnmatch
+        dates: list
+            if [None,None] data is returned as is
+            else [yyyy-mm-dd,yyyy-mm-dd] is expected
+        clouds: bool
+            flag to try to obtain clouds from metadata
         """
         filtered_imgs = []
         if self.sat_imgs_flag:
@@ -402,7 +423,7 @@ class gcSatImg(object):
 
 
 class ThreadUrlDownload(threading.Thread):
-    """Threaded Url download"""
+    """Threaded Url download."""
 
     def __init__(self, queue_):
         threading.Thread.__init__(self)
@@ -420,13 +441,13 @@ class ThreadUrlDownload(threading.Thread):
             self.queue.task_done()
 
 
-class bucket_images_downloader(object):
+class bucket_images_downloader:
     """
-    Base class to download images
+    Base class to download images.
     """
 
     def __init__(self, spacecraft="L8", bands=None, logger=None):
-        """"""
+        """Constructor."""
 
         if spacecraft not in ("L5", "L8", "S2"):
             raise ValueError(
@@ -459,7 +480,6 @@ class bucket_images_downloader(object):
                     self.bands.append(band)
 
     def build_datapath_landsat(self, bucket_list=[], bucket_arxive=[], bqa_clouds=True):
-        """"""
         bucket_atomic = []
         bucket_atomic_arxive = []
         for bi, ba in zip(bucket_list, bucket_arxive):
@@ -480,7 +500,7 @@ class bucket_images_downloader(object):
     def build_datapath_sentinel2(
         self, bucket_list=[], bucket_arxive=[], bqa_clouds=True, keep_safe=True
     ):
-        """purpose build datapath for sentinel2
+        """Build datapath for Sentinel2.
 
         Parameters
         ----------
@@ -563,9 +583,6 @@ class bucket_images_downloader(object):
         max_proc_thread=1,
         force_download=False,
     ):
-        """"""
-        # build queue
-
         bucket_cases_proc = []
         bucket_arxive_proc = []
         for bki in bucket_cases:

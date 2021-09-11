@@ -1,3 +1,15 @@
+"""
+Landsat helper functions
+========================
+
+.. autosummary::
+    :toctree: ../generated/
+
+    get_clouds_landsat
+    calibrate_landsat_bqa
+    calibrate_landsat5
+    calibrate_landsat8
+"""
 import numpy as np
 import rasterio as rio
 from collections import OrderedDict
@@ -67,7 +79,9 @@ def calibrate_landsat_bqa(
     nodata=0,
     close=False,
 ):
-    """Calibrate Landsat BQA band.
+    """
+    Calibrate Landsat BQA band.
+
     Parameters
     ----------
     raster:

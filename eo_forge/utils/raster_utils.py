@@ -1,5 +1,29 @@
 """
-Module with utility functions for raster datasets.
+Helper functions for raster datasets
+====================================
+
+.. autosummary::
+    :toctree: ../generated/
+
+    bbox_from_raster
+    clip_raster
+    reproject_raster_to_bbox
+    reproject_raster_north_south
+    check_resample
+    get_raster_polygon
+    check_shape_match
+    convert_to_raster_crs
+    resample_raster
+    write_mem_raster
+    write_raster
+    check_raster_clip_crs
+    check_raster_shape_match
+    get_nodata_mask
+    apply_nodata_mask
+    apply_isvalid_mask
+    get_is_valid_mask
+    get_raster_data_and_profile
+    shapes2array
 """
 import warnings
 
@@ -86,7 +110,7 @@ def clip_raster(
         If True, adjust the extent of raster to match the BBox. Otherwise, leave the
         raster's original shape and mask the values outside the bbox.
 
-    Return
+    Returns
     -------
     clipped raster: opened rasterio.MemoryFile
     """
@@ -260,9 +284,9 @@ def check_resample(raster, target_resolution):
     target_resolution: float
         Required resolution in meters.
 
-    Return
-    ------
-    resample_: bool
+    Returns
+    -------
+    resample: bool
         True if resample is required
     scale_factor: float
         Calculated scale factor
@@ -282,13 +306,16 @@ def check_resample(raster, target_resolution):
 
 
 def get_raster_polygon(raster, ccw=True):
-    """Return a the raster's bounding box polygon.
+    """
+    Return a the raster's bounding box polygon.
+
     Parameters
     ----------
     raster: opened raster instance
         Input raster.
     ccw: bool
         Counter-clockwise order (True) or not (False)
+
     Returns
     -------
     Polygon: shapely.geometry.box
@@ -338,7 +365,7 @@ def convert_to_raster_crs(bbox, raster_dataset, error=False, verbose=False):
     verbose: bool
         Control verbosity.
 
-    Return
+    Returns
     -------
     bbox: geodataframe
         Transformed bbox.
@@ -409,16 +436,19 @@ def write_raster(file_path, data, **profile):
 def check_raster_clip_crs(
     raster_dataset, roi_bbox, enable_transform=True, verbose=False
 ):
-    """check band crs match to provided bbox
-        Parameters
-        ----------
-        raster_dataset: raster instance opened by rasterio
-        roi_bbox: geodataframe instance
-        enable_transform: bool to enable trasnform or raise error
-    Return
+    """
+    Check band crs match to provided bbox
+
+    Parameters
+    ----------
+    raster_dataset: raster instance opened by rasterio
+    roi_bbox: geodataframe instance
+    enable_transform: bool to enable trasnform or raise error
+
+    Returns
     -------
-        returns a DatasetReader instance from either a filesystem raster
-        or MemoryFile (if out_path is None)
+    Returns a DatasetReader instance from either a filesystem raster
+    or MemoryFile (if out_path is None)
     """
 
     # Check CRS Match
@@ -445,7 +475,7 @@ def check_raster_clip_crs(
 
 
 def check_raster_shape_match(raster, roi_shape, enable_transform=True):
-    """check raster shape match"""
+    """Check raster shape match."""
     roi_update = check_raster_clip_crs(
         raster, roi_shape, enable_transform=enable_transform
     )
@@ -466,15 +496,18 @@ def check_raster_shape_match(raster, roi_shape, enable_transform=True):
 
 
 def get_nodata_mask(raster_dataset, nodata=0, out_path=None):
-    """get_nodata_mask from raster by filtering values
+    """
+    Get nodata_mask from raster by filtering values.
+
     Parameters
     ----------
-        raster: raster instance (rasterio open)
-        nodata: value
-        out_path: file path (optional, else return in memory)
-    Return
-    ------
-        in-memory raster mask or wrtitten to disk
+    raster: raster instance (rasterio open)
+    nodata: value
+    out_path: file path (optional, else return in memory)
+
+    Returns
+    -------
+    In-memory raster mask or wrtitten to disk
     """
     # as numpy (NxM)
     data = raster_dataset.read()
@@ -494,15 +527,18 @@ def get_nodata_mask(raster_dataset, nodata=0, out_path=None):
 
 
 def apply_nodata_mask(raster_dataset, raster_mask, nodata=0, out_path=None):
-    """apply_nodata_mask to raster
+    """
+    Apply nodata_mask to raster.
+
     Parameters
     ----------
-        raster: raster instance (rasterio open)
-        raster mask: raster instance (rasterio open)
-        out_path: file path (optional, else return in memory)
-    Return
-    ------
-        in-memory raster mask or written to disk
+    raster: raster instance (rasterio open)
+    raster mask: raster instance (rasterio open)
+    out_path: file path (optional, else return in memory)
+
+    Returns
+    -------
+    In-memory raster mask or written to disk
     """
     data = raster_dataset.read()
     mask = raster_mask.read(1)
@@ -526,15 +562,18 @@ def apply_nodata_mask(raster_dataset, raster_mask, nodata=0, out_path=None):
 
 
 def apply_isvalid_mask(raster_dataset, raster_mask, nodata=0, out_path=None):
-    """apply_isvalid_mask to raster
+    """
+    Apply_isvalid_mask to raster
+
     Parameters
     ----------
-        raster: raster instance (rasterio open)
-        raster mask: raster instance (rasterio open)
-        out_path: file path (optional, else return in memory)
-    Return
-    ------
-        in-memory raster mask or written to disk
+    raster: raster instance (rasterio open)
+    raster mask: raster instance (rasterio open)
+    out_path: file path (optional, else return in memory)
+
+    Returns
+    -------
+    in-memory raster mask or written to disk
     """
     data = raster_dataset.read()
     mask = raster_mask.read(1)
@@ -558,15 +597,18 @@ def apply_isvalid_mask(raster_dataset, raster_mask, nodata=0, out_path=None):
 
 
 def get_is_valid_mask(raster_dataset, filter_values=(0, 0), out_path=None):
-    """get_is_valid_mask from raster by filtering values
+    """
+    Get is_valid_mask from raster by filtering values.
+
     Parameters
     ----------
-        raster: raster instance (rasterio open)
-        filter_values: tuple
-        out_path: file path (optional, else return in memory)
-    Return
-    ------
-        in-memory raster mask or wrtitten to disk
+    raster: raster instance (rasterio open)
+    filter_values: tuple
+    out_path: file path (optional, else return in memory)
+
+    Returns
+    -------
+    In-memory raster mask or wrtitten to disk
     """
     # as numpy (NxM)
     data = raster_dataset.read()
@@ -589,22 +631,23 @@ def get_raster_data_and_profile(raster):
     """get raster data and profile
     Parameters
     ----------
-        raster: raster instance (rasterio open)
+    raster: raster instance (rasterio open)
 
-    Return
-    ------
-        raster.read()
-        raster.profile
+    Returns
+    -------
+    raster.read()
+    raster.profile
     """
     return raster.read(), raster.profile
 
 
 def shapes2array(shapes, raster):
-    """set shapes to raster
+    """
+    Set shapes to raster.
+
     Parameters
     ----------
-        shapes: geodataframe
-
+    shapes: geodataframe
     """
 
     # read geometries
