@@ -1,0 +1,4 @@
+# Additional requeriments related to the documentation build only
+sphinx
+numpydoc
+sphinx_rtd_theme
