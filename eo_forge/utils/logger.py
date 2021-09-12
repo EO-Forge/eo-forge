@@ -3,6 +3,7 @@ import logging.config
 
 # TODO: Migrate to logging config file or dict
 
+
 def update_logger(logger, msg, log_type):
     """
     :param msg: message to be added
