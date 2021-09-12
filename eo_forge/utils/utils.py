@@ -20,12 +20,12 @@ def rem_trail_os_sep(scene_path_dir):
     return scene_path_dir_
 
 
-def walk_dir_files(target_base_path_, cases=["*.i", "*.o", "*.r"]):
+def walk_dir_files(target_base_path_, cases=("*.i", "*.o", "*.r")):
     """
     Get dir and files from a target_path.
 
-    Paramters
-    ---------
+    Parameters
+    ----------
     target_base_path_: base path that will be check by os.walk
     cases: wild card extension to be checked in files (generates a dictionary)
     """
