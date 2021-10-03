@@ -15,7 +15,7 @@ for a full description of the tools included in the EO-Forge library.
 Installation
 ============
 
-You can install the from PyPI by simply running::
+You can install them from PyPI by simply running::
 
     pip install eo_forge
 
@@ -26,3 +26,5 @@ To install the package, from the project root run::
 
     pip install .     # Regular installation
     pip install -e .  # Install in development mode
+
+
