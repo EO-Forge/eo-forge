@@ -28,7 +28,7 @@ from eo_forge.utils.raster_utils import (
     write_mem_raster,
     write_raster,
 )
-from eo_forge.utils.shapes import bbox_to_geodataframe, set_buffer_on_gdf
+from eo_forge.utils.shapes import set_buffer_on_gdf
 
 
 class BaseGenericLoader:
@@ -209,7 +209,7 @@ class BaseGenericLoader:
 
             if clipping_flag:
                 # Check BBOX
-                roi_bbox = bbox_to_geodataframe(bbox)
+                roi_bbox = bbox.copy()
 
                 # check roi
                 roi_check = check_raster_clip_crs(
@@ -373,7 +373,7 @@ class BaseGenericLoader:
 
         if clipping_flag:
             # Check BBOX
-            roi_bbox = bbox_to_geodataframe(bbox)
+            roi_bbox = bbox.copy()
 
             # check roi
             roi_check = check_raster_clip_crs(

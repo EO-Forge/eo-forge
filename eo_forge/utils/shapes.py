@@ -5,19 +5,8 @@ Helper functions for Bounding boxs
 .. autosummary::
     :toctree: ../generated/
 
-    bbox_to_geodataframe
     set_buffer_on_gdf
 """
-import geopandas as gpd
-
-
-def bbox_to_geodataframe(bbox):
-    """Convert a sentinel hub bbox instance to geodataframe."""
-    if isinstance(bbox, gpd.geodataframe.GeoDataFrame):
-        return bbox
-    else:
-        return gpd.GeoDataFrame(geometry=[bbox.geometry], crs=str(bbox.crs))
-
 
 def set_buffer_on_gdf(
     gdf, buffer=50, convex_hull=True, to_epsg_=True, epsg_="EPSG:3857"

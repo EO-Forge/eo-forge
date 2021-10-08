@@ -10,7 +10,6 @@ Sentinel2 helper functions
     get_sentinel_granule_img
     get_clouds_msil1c
 """
-import numpy as np
 import shutil
 import os
 from subprocess import run

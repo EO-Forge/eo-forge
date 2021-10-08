@@ -5,14 +5,11 @@ Helper functions for raster datasets
 .. autosummary::
     :toctree: ../generated/
 
-    bbox_from_raster
     clip_raster
     reproject_raster_to_bbox
     reproject_raster_north_south
     check_resample
     get_raster_polygon
-    check_shape_match
-    convert_to_raster_crs
     resample_raster
     write_mem_raster
     write_raster
@@ -28,50 +25,18 @@ Helper functions for raster datasets
 import warnings
 
 import numpy as np
+from geopandas import GeoDataFrame
 import rasterio as rio
 import rasterio.mask as rasterio_mask
-from geopandas import GeoDataFrame
 from rasterio import Affine, MemoryFile
-from rasterio import crs as rasterio_crs
 from rasterio.features import rasterize
 from rasterio.enums import Resampling
 from rasterio.warp import (
-    transform as rasterio_transform,
     calculate_default_transform,
     reproject,
 )
-from sentinelhub import BBox
 from shapely.geometry import box
 from rasterio.warp import reproject as rasterio_reproject, Resampling
-from eo_forge.utils.shapes import bbox_to_geodataframe
-
-
-def bbox_from_raster(rasterio_dataset, epsg=4326):
-    """
-    Get a `sentinelhub.BBox` bounding box from a rasterio dataset.
-
-    Parameters
-    ----------
-    rasterio_dataset: rasterio.DatasetReader
-        Opened raster dataset
-    epsg: int or str
-        An EPSG code. Strings will be converted to integers.
-    crs: sentinelhub.CRS constant
-        Target coordinate reference system
-
-    Returns
-    -------
-    bbox: sentinelhub.BBox instance
-    """
-    wgs84_crs = rasterio_crs.CRS.from_epsg(epsg)
-    bounds_raster = rasterio_dataset.bounds
-    lons, lats = rasterio_transform(
-        rasterio_dataset.crs,
-        wgs84_crs,
-        xs=[bounds_raster.left, bounds_raster.right],
-        ys=[bounds_raster.bottom, bounds_raster.top],
-    )
-    return BBox(bbox=[lons[0], lats[0], lons[1], lats[1]], crs=f"EPSG:{epsg}")
 
 
 def clip_raster(
@@ -82,6 +47,7 @@ def clip_raster(
     crop=True,
     nodata=0,
     all_touched=True,
+    filled=True,
     hard_bbox=False,
 ):
     """
@@ -92,7 +58,7 @@ def clip_raster(
     ----------
     raster: rasterio dataset
         Input raster.
-    bbox: sentinelhub.BBox or Geopandas Dataframe.
+    bbox: Geopandas Dataframe.
         Region of Interest.
     crop: bool
         Whether to crop the raster to the extent of the roi_bbox.
@@ -106,6 +72,10 @@ def clip_raster(
     all_touched: boolean
         If True, all pixels touched by geometries will be included.
         If false, only pixels whose center is within the polygon are included.
+    filled: boolean 
+        If True, the pixels outside the features will be set to nodata. If False, 
+        the output array will contain the original pixel data, and only the mask 
+        will be based on shapes. Defaults to True.
     hard_bbox: bool
         If True, adjust the extent of raster to match the BBox. Otherwise, leave the
         raster's original shape and mask the values outside the bbox.
@@ -114,13 +84,9 @@ def clip_raster(
     -------
     clipped raster: opened rasterio.MemoryFile
     """
-
-    if isinstance(bbox, BBox):
-        bbox = bbox_to_geodataframe(bbox)
-
     if not isinstance(bbox, GeoDataFrame):
         raise TypeError(
-            "The input BBox is neither a sentinelhub.BBox or Geopandas Dataframe."
+            "The input BBox should be a Geopandas Dataframe."
         )
     profile = raster.profile
     bbox_epsg = bbox.crs.to_epsg()
@@ -141,6 +107,7 @@ def clip_raster(
             bbox.geometry.values,
             crop=crop,
             nodata=nodata,
+            filled=filled,
             all_touched=all_touched,
         )
     except ValueError as e:
@@ -152,6 +119,7 @@ def clip_raster(
                 bbox.geometry.values,
                 crop=False,
                 nodata=nodata,
+                filled=filled,
                 all_touched=all_touched,
             )
             # keep partial match
@@ -184,7 +152,7 @@ def reproject_raster_to_bbox(raster, roi_bbox, close=False):
         Close the input raster dataset before returning the clipped raster.
     """
 
-    left, bottom, right, top = roi_bbox.bounds.values[0]
+    left, bottom, right, top = roi_bbox.total_bounds
     window = rio.windows.from_bounds(
         transform=raster.transform, left=left, bottom=bottom, right=right, top=top
     )
@@ -256,7 +224,7 @@ def reproject_raster_north_south(raster, close=False):
     )
 
     data_raster = raster.read()
-    data = np.zeros((1, height, width), dtype=data_raster.dtype)
+    data = np.zeros((raster.count, height, width), dtype=data_raster.dtype)
 
     reproject(
         source=data_raster,
@@ -327,63 +295,6 @@ def get_raster_polygon(raster, ccw=True):
         raster.bounds.bottom,
         ccw=ccw,
     )
-
-
-def check_shape_match(raster, bbox, enable_transform=True):
-    """Check if a raster and a target bbox match"""
-    roi_update = convert_to_raster_crs(bbox, raster)
-    raster_polygon = get_raster_polygon(raster)
-    roi_geometry = roi_update.geometry.unary_union
-    intersect_ = raster_polygon.intersects(roi_geometry)
-    contains_ = raster_polygon.contains(roi_geometry)
-    if intersect_ and contains_:
-        full_match = True
-        area = 1
-    elif intersect_:
-        full_match = False
-        area = raster_polygon.intersection(roi_geometry).area / roi_geometry.area
-    else:
-        full_match = None
-        area = 0
-    return full_match, area
-
-
-def convert_to_raster_crs(bbox, raster_dataset, error=False, verbose=False):
-    """
-    Convert a BBox's crs to the raster's crs.
-
-    Parameters
-    ----------
-    bbox: sentinelhub.BBox
-        Clipping BBox.
-    raster_dataset: raster instance opened by rasterio
-        Input raster.
-    error: bool
-        If true, raise a ValueError exception if the bbox's and the
-        rasters's CRS differ.
-        If False (default), return the BBox with the raster's CRS.
-    verbose: bool
-        Control verbosity.
-
-    Returns
-    -------
-    bbox: geodataframe
-        Transformed bbox.
-    """
-    raster_crs_epsg = raster_dataset.crs.to_epsg()
-    if bbox.crs.epsg == raster_crs_epsg:
-        return bbox
-    else:
-        if error:
-            raise ValueError("CRS Mismatch")
-        else:
-            if verbose:
-                print(
-                    f"WARNING: Transforming bbox crs from "
-                    f"{bbox.crs.epsg} to {raster_crs_epsg}"
-                )
-            return bbox.transform(f"EPSG:{raster_crs_epsg}")
-
 
 def resample_raster(raster, scale, close=False):
     """
