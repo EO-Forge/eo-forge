@@ -72,9 +72,9 @@ def clip_raster(
     all_touched: boolean
         If True, all pixels touched by geometries will be included.
         If false, only pixels whose center is within the polygon are included.
-    filled: boolean 
-        If True, the pixels outside the features will be set to nodata. If False, 
-        the output array will contain the original pixel data, and only the mask 
+    filled: boolean
+        If True, the pixels outside the features will be set to nodata. If False,
+        the output array will contain the original pixel data, and only the mask
         will be based on shapes. Defaults to True.
     hard_bbox: bool
         If True, adjust the extent of raster to match the BBox. Otherwise, leave the
@@ -85,9 +85,7 @@ def clip_raster(
     clipped raster: opened rasterio.MemoryFile
     """
     if not isinstance(bbox, GeoDataFrame):
-        raise TypeError(
-            "The input BBox should be a Geopandas Dataframe."
-        )
+        raise TypeError("The input BBox should be a Geopandas Dataframe.")
     profile = raster.profile
     bbox_epsg = bbox.crs.to_epsg()
     raster_epsg = raster.crs.to_epsg()
@@ -295,6 +293,7 @@ def get_raster_polygon(raster, ccw=True):
         raster.bounds.bottom,
         ccw=ccw,
     )
+
 
 def resample_raster(raster, scale, close=False):
     """
