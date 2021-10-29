@@ -11,33 +11,31 @@ Downloader module
     bucket_images_downloader
 """
 
-import os
-from subprocess import run
 import fnmatch
-import shutil
-from tempfile import mkdtemp
-from subprocess import run
-import tqdm
-import pandas as pd
+import os
+import platform
 import queue
+import shutil
 import threading
 import warnings
 from pathlib import Path
+from subprocess import run
+from tempfile import mkdtemp
+
+import pandas as pd
+import tqdm
 
 from eo_forge.utils.landsat import (
     LANDSAT5_BANDS_RESOLUTION,
     LANDSAT8_BANDS_RESOLUTION,
     get_clouds_landsat,
 )
-
 from eo_forge.utils.sentinel import (
+    SENTINEL2_BANDS_RESOLUTION,
     get_clouds_msil1c,
     get_granule_from_meta_sentinel,
 )
-
-from eo_forge.utils.sentinel import SENTINEL2_BANDS_RESOLUTION
 from eo_forge.utils.utils import rem_trail_os_sep
-
 
 # libs
 from .logger import update_logger
@@ -177,9 +175,13 @@ class gcSatImg:
 
         if boto_config:
             os.environ["BOTO_CONFIG"] = boto_config
-            self.boto_path = os.getenv["BOTO_CONFIG"]
+            self.boto_path = os.getenv("BOTO_CONFIG")
         else:
-            self.boto_path = Path(os.getenv("HOME")) / ".boto"
+            if platform.system() != "Windows":
+                self.boto_path = Path(os.getenv("HOME")) / ".boto"
+            else:
+                self.boto_path = Path(os.getenv("USERPROFILE")) / ".boto"
+            print(f"Setting boto path to: {self.boto_path}")
 
     def gcImagesCheck(self, url_filler):
         """
@@ -486,13 +488,15 @@ class bucket_images_downloader:
             bi = rem_trail_os_sep(bi)
             bi_base = os.path.basename(bi)
             for b in self.bands:
-                bucket_atomic.append(os.path.join(bi, bi_base + "_" + b + ".TIF"))
+                bucket_path = f"{bi}/{bi_base}_{b}.TIF"
+                bucket_atomic.append(bucket_path)
                 bucket_atomic_arxive.append(ba)
             if bqa_clouds:
                 for b in self._extra_bands:
-                    bucket_atomic.append(os.path.join(bi, bi_base + "_" + b + ".TIF"))
+                    bucket_path = f"{bi}/{bi_base}_{b}.TIF"
+                    bucket_atomic.append(bucket_path)
                     bucket_atomic_arxive.append(ba)
-            bucket_atomic.append(os.path.join(bi, bi_base + "_MTL.txt"))
+            bucket_atomic.append(f"{bi}/{bi_base}_MTL.txt")
             bucket_atomic_arxive.append(ba)
 
         return bucket_atomic, bucket_atomic_arxive

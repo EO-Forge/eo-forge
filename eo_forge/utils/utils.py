@@ -8,9 +8,9 @@ General helper functions
     rem_trail_os_sep
     walk_dir_files
 """
-import os
-import glob
 import fnmatch
+import glob
+import os
 
 
 def rem_trail_os_sep(scene_path_dir):

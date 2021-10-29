@@ -25,18 +25,16 @@ Helper functions for raster datasets
 import warnings
 
 import numpy as np
-from geopandas import GeoDataFrame
 import rasterio as rio
 import rasterio.mask as rasterio_mask
+from geopandas import GeoDataFrame
 from rasterio import Affine, MemoryFile
-from rasterio.features import rasterize
 from rasterio.enums import Resampling
-from rasterio.warp import (
-    calculate_default_transform,
-    reproject,
-)
+from rasterio.features import rasterize
+from rasterio.warp import Resampling, calculate_default_transform
+from rasterio.warp import reproject
+from rasterio.warp import reproject as rasterio_reproject
 from shapely.geometry import box
-from rasterio.warp import reproject as rasterio_reproject, Resampling
 
 
 def clip_raster(

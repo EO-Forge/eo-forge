@@ -10,15 +10,16 @@ Sentinel2 helper functions
     get_sentinel_granule_img
     get_clouds_msil1c
 """
-import shutil
 import os
+import shutil
+from collections import OrderedDict
 from subprocess import run
 from tempfile import mkdtemp
+
 import rasterio as rio
 from lxml import etree
-from collections import OrderedDict
-from eo_forge.utils.raster_utils import write_mem_raster
 
+from eo_forge.utils.raster_utils import write_mem_raster
 
 ###############################
 # Sentinel2 General definitions
@@ -86,7 +87,7 @@ def get_sentinel_granule_img(metadata_file):
     root = tree.getroot()
     images_elements = root.findall(".//Granule/IMAGE_FILE")
     images_elements_txt = [element.text.strip() for element in images_elements]
-    base_ = images_elements_txt[0].split(os.sep)
+    base_ = images_elements_txt[0].split("/")
     granule = base_[1]
     image_base = "_".join(base_[-1].split("_")[:-1])
     return granule, image_base
