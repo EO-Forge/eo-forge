@@ -15,19 +15,16 @@ from datetime import datetime
 
 import rasterio
 
+from eo_forge.io.GenLoader import BaseGenericLoader
 from eo_forge.utils.landsat import (
-    calibrate_landsat8,
-    calibrate_landsat_bqa,
-    calibrate_landsat5,
     LANDSAT5_BANDS_RESOLUTION,
     LANDSAT8_BANDS_RESOLUTION,
     LANDSAT_SUPPORTED_RESOLUTIONS,
+    calibrate_landsat5,
+    calibrate_landsat8,
+    calibrate_landsat_bqa,
 )
-from eo_forge.utils.raster_utils import (
-    get_is_valid_mask,
-)
-
-from eo_forge.io.GenLoader import BaseGenericLoader
+from eo_forge.utils.raster_utils import get_is_valid_mask
 
 
 class LandsatLoader(BaseGenericLoader):

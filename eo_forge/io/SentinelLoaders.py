@@ -10,26 +10,24 @@ Sentinel loaders module
 import glob
 import os
 from datetime import datetime
+
+import geopandas as gpd
 import numpy as np
 import rasterio as rio
 from lxml import etree
 
-import geopandas as gpd
-
+from eo_forge.io.GenLoader import BaseGenericLoader
 from eo_forge.utils.raster_utils import (
     get_is_valid_mask,
     shapes2array,
     write_mem_raster,
 )
 from eo_forge.utils.sentinel import (
-    calibrate_sentinel2,
     SENTINEL2_BANDS_RESOLUTION,
     SENTINEL2_SUPPORTED_RESOLUTIONS,
+    calibrate_sentinel2,
 )
-
 from eo_forge.utils.utils import walk_dir_files
-from eo_forge.io.GenLoader import BaseGenericLoader
-
 
 ######################################################################
 

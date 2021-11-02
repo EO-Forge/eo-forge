@@ -114,6 +114,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.pyenv
 
 # Spyder project settings
 .spyderproject
@@ -139,3 +140,8 @@ dmypy.json
 .idea
 TEMP*
 /eo_forge/VERSION
+# bash
+make_pyenv.sh
+
+#
+examples/products-*

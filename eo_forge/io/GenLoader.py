@@ -16,19 +16,19 @@ import numpy as np
 import rasterio
 
 from eo_forge.utils.raster_utils import (
-    resample_raster,
-    clip_raster,
-    check_resample,
-    reproject_raster_north_south,
+    apply_isvalid_mask,
     check_raster_clip_crs,
     check_raster_shape_match,
-    reproject_raster_to_bbox,
-    apply_isvalid_mask,
+    check_resample,
+    clip_raster,
     get_raster_data_and_profile,
+    reproject_raster_north_south,
+    reproject_raster_to_bbox,
+    resample_raster,
     write_mem_raster,
     write_raster,
 )
-from eo_forge.utils.shapes import bbox_to_geodataframe, set_buffer_on_gdf
+from eo_forge.utils.shapes import set_buffer_on_gdf
 
 
 class BaseGenericLoader:
@@ -209,7 +209,7 @@ class BaseGenericLoader:
 
             if clipping_flag:
                 # Check BBOX
-                roi_bbox = bbox_to_geodataframe(bbox)
+                roi_bbox = bbox.copy()
 
                 # check roi
                 roi_check = check_raster_clip_crs(
@@ -373,7 +373,7 @@ class BaseGenericLoader:
 
         if clipping_flag:
             # Check BBOX
-            roi_bbox = bbox_to_geodataframe(bbox)
+            roi_bbox = bbox.copy()
 
             # check roi
             roi_check = check_raster_clip_crs(

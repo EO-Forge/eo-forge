@@ -10,12 +10,12 @@ Landsat helper functions
     calibrate_landsat5
     calibrate_landsat8
 """
-import numpy as np
-import rasterio as rio
 from collections import OrderedDict
 
-from eo_forge.utils.raster_utils import write_mem_raster
+import numpy as np
+import rasterio as rio
 
+from eo_forge.utils.raster_utils import write_mem_raster
 
 ###############################
 # Landsat General definitions

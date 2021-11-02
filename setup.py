@@ -13,7 +13,7 @@ if __name__ == "__main__":
     config.read(setup_cfg_path)
     version = config["metadata"]["version"]
 
-    with open(PROJECT_ROOT_DIR/"eo_forge/VERSION", "w") as version_file:
+    with open(PROJECT_ROOT_DIR / "eo_forge/VERSION", "w") as version_file:
         version_file.write(version)
 
     setuptools.setup()

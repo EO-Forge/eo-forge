@@ -4,7 +4,9 @@ matplotlib
 rasterio
 lxml
 geopandas
-sentinelhub
 shapely
 tqdm
 gsutil
+# format
+isort
+black
