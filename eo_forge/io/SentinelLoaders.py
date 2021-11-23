@@ -17,16 +17,12 @@ import rasterio as rio
 from lxml import etree
 
 from eo_forge.io.GenLoader import BaseGenericLoader
-from eo_forge.utils.raster_utils import (
-    get_is_valid_mask,
-    shapes2array,
-    write_mem_raster,
-)
-from eo_forge.utils.sentinel import (
-    SENTINEL2_BANDS_RESOLUTION,
-    SENTINEL2_SUPPORTED_RESOLUTIONS,
-    calibrate_sentinel2,
-)
+from eo_forge.utils.logger import update_logger
+from eo_forge.utils.raster_utils import (get_is_valid_mask, shapes2array,
+                                         write_mem_raster)
+from eo_forge.utils.sentinel import (SENTINEL2_BANDS_RESOLUTION,
+                                     SENTINEL2_SUPPORTED_RESOLUTIONS,
+                                     calibrate_sentinel2)
 from eo_forge.utils.utils import walk_dir_files
 
 ######################################################################
@@ -84,6 +80,7 @@ class Sentinel2Loader(BaseGenericLoader):
         bands=None,
         resolution=20,
         bbox=None,
+        logger=None,
         **kwargs,
     ):
         """
@@ -99,9 +96,18 @@ class Sentinel2Loader(BaseGenericLoader):
             List of bands to process
         """
         super().__init__(
-            folder, resolution=resolution, bands=bands, bbox=bbox, **kwargs
+            folder,
+            resolution=resolution,
+            bands=bands,
+            bbox=bbox,
+            logger=logger,
+            **kwargs,
         )
         self.raw_metadata = None
+        self.spacecraft = 2
+        update_logger(
+            self.logger_, f"Running on Sentinel {self.spacecraft} data", "INFO"
+        )
 
     def _read_metadata(self, product_path):
         """

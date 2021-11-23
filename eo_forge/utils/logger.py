@@ -1,13 +1,24 @@
 import logging
 import logging.config
+import os
 
 # TODO: Migrate to logging config file or dict
 
 
 def update_logger(logger, msg, log_type):
     """
-    :param msg: message to be added
-    :param type: one of logging.levels
+    Parameters
+    ----------
+        logger: logging module instance or None
+            logger to be populated (or None)
+        msg: Any
+            message to be added
+        log_type: one of logging.levels
+            One of CRITICAL,ERROR,WARNING,INFO,DEBUG
+
+    Returns
+    -------
+        None
     """
     levels = {
         "CRITICAL": 50,
@@ -20,7 +31,12 @@ def update_logger(logger, msg, log_type):
     assert log_type in list(levels)
 
     if logger is None:
-        print("Logger NOT SET - trying to log: {}-{}".format(log_type, msg))
+        print_on_missing_logger = os.getenv("PRINT_ON_MISSING_LOGGER", False)
+        if print_on_missing_logger:
+            print("Logger NOT SET - trying to log: {}-{}".format(log_type, msg))
+        else:
+            # silently pass
+            pass
     else:
         logger.log(levels[log_type], msg)
 

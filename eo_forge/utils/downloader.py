@@ -12,6 +12,7 @@ Downloader module
 """
 
 import fnmatch
+import logging
 import os
 import platform
 import queue
@@ -25,16 +26,12 @@ from tempfile import mkdtemp
 import pandas as pd
 import tqdm
 
-from eo_forge.utils.landsat import (
-    LANDSAT5_BANDS_RESOLUTION,
-    LANDSAT8_BANDS_RESOLUTION,
-    get_clouds_landsat,
-)
-from eo_forge.utils.sentinel import (
-    SENTINEL2_BANDS_RESOLUTION,
-    get_clouds_msil1c,
-    get_granule_from_meta_sentinel,
-)
+from eo_forge.utils.landsat import (LANDSAT5_BANDS_RESOLUTION,
+                                    LANDSAT8_BANDS_RESOLUTION,
+                                    get_clouds_landsat)
+from eo_forge.utils.sentinel import (SENTINEL2_BANDS_RESOLUTION,
+                                     get_clouds_msil1c,
+                                     get_granule_from_meta_sentinel)
 from eo_forge.utils.utils import rem_trail_os_sep
 
 # libs
@@ -140,7 +137,7 @@ class gcSatImg:
     SENTINEL_FILTERS = []
     SENTINEL2_META = "{}/MTD_MSIL1C.xml"
 
-    def __init__(self, spacecraft="L8", boto_config=None):
+    def __init__(self, spacecraft="L8", boto_config=None, logger=None):
         """
         Initialize the google cloud image checker
 
@@ -156,6 +153,11 @@ class gcSatImg:
         -------
         None
         """
+        assert logger is None or isinstance(
+            logger, logging.Logger
+        ), "None or logging instance are valid values for logger"
+        self.logger_ = logger
+
         if spacecraft == "L8":
             self.base_url = self.BASE_LANDSAT8
             self.date_idx = self.DATE_LANDSAT8
@@ -172,7 +174,7 @@ class gcSatImg:
             raise ValueError("EITHER L8,L5,S2")
 
         self.spacecraft = spacecraft
-
+        update_logger(self.logger_, f"Running on spacecraft {self.spacecraft}", "INFO")
         if boto_config:
             os.environ["BOTO_CONFIG"] = boto_config
             self.boto_path = os.getenv("BOTO_CONFIG")
@@ -181,7 +183,7 @@ class gcSatImg:
                 self.boto_path = Path(os.getenv("HOME")) / ".boto"
             else:
                 self.boto_path = Path(os.getenv("USERPROFILE")) / ".boto"
-            print(f"Setting boto path to: {self.boto_path}")
+        update_logger(self.logger_, f"Setting boto path to: {self.boto_path}", "INFO")
 
     def gcImagesCheck(self, url_filler):
         """
@@ -203,6 +205,8 @@ class gcSatImg:
         URL = BASE_SAT.format(*url_filler)
         cmd = ["gsutil", "ls", URL]
         p = run(cmd, capture_output=True, text=True)
+        #
+        update_logger(self.logger_, f"Checking bucket: {cmd}", "DEBUG")
         if p.returncode == 0:
             stdout = p.stdout
             stderr = ""
@@ -254,13 +258,14 @@ class gcSatImg:
         """
         dir_ = mkdtemp()
         cloud_ = []
-        for i, r in pd_filt.iterrows():
+        for _, r in pd_filt.iterrows():
             prod_id = r["product-id"]
             bucket_path = r["base-url"]
             local_path = dir_  # to dump files
             remote_path = self.build_metadata_path(bucket_path, prod_id)
             #
             cmd = ["gsutil", "cp", remote_path, local_path]
+            update_logger(self.logger_, f"Copying meta with cmd: {cmd}", "DEBUG")
             p = run(cmd, capture_output=True, text=True)
             if p.returncode == 0:
                 file_metadata = self.build_metadata_path(local_path, prod_id)
@@ -269,8 +274,12 @@ class gcSatImg:
                 if remove_meta:
                     os.remove(file_metadata)
             else:
-                print(f"FAIL @ {remote_path}")
                 cloud_.append(None)
+                update_logger(
+                    self.logger_,
+                    f"FAIL @ {remote_path} appending None as cloud level",
+                    "WARNING",
+                )
         shutil.rmtree(dir_)
         pd_filt["clouds"] = cloud_
         return pd_filt
@@ -451,14 +460,19 @@ class bucket_images_downloader:
     def __init__(self, spacecraft="L8", bands=None, logger=None):
         """Constructor."""
 
+        assert logger is None or isinstance(
+            logger, logging.Logger
+        ), "None or logging instance are valid values for logger"
+        self.logger_ = logger
+
         if spacecraft not in ("L5", "L8", "S2"):
             raise ValueError(
                 f"Only Landsat5 (L5) , Landsat8 (L8) and Sentinel2 (S2) are supported. "
                 f'Spacecraft received: "{spacecraft}"'
             )
         self.spacecraft = spacecraft
+        update_logger(self.logger_, f"Running on spacecraft {self.spacecraft}", "INFO")
 
-        self.logger_ = logger
         if spacecraft == "L8":
             self._ordered_bands = tuple(LANDSAT8_BANDS_RESOLUTION.keys())
             self._extra_bands = ["BQA"]
@@ -480,6 +494,8 @@ class bucket_images_downloader:
                     warnings.warn(f"'{band}' is not a valid band. Ignoring")
                 else:
                     self.bands.append(band)
+
+        update_logger(self.logger_, f"Requesting bands {self.bands}", "INFO")
 
     def build_datapath_landsat(self, bucket_list=[], bucket_arxive=[], bqa_clouds=True):
         bucket_atomic = []
@@ -625,6 +641,11 @@ class bucket_images_downloader:
         q = queue.Queue(maxsize=len(i_cases))
         for qc in i_cases:
             q.put(qc)
+            update_logger(
+                self.logger_,
+                f"Queueing cmd for download: {qc}",
+                "DEBUG",
+            )
 
         for i in range(max_proc_thread):
             t = ThreadUrlDownload(q)
