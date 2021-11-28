@@ -26,12 +26,16 @@ from tempfile import mkdtemp
 import pandas as pd
 import tqdm
 
-from eo_forge.utils.landsat import (LANDSAT5_BANDS_RESOLUTION,
-                                    LANDSAT8_BANDS_RESOLUTION,
-                                    get_clouds_landsat)
-from eo_forge.utils.sentinel import (SENTINEL2_BANDS_RESOLUTION,
-                                     get_clouds_msil1c,
-                                     get_granule_from_meta_sentinel)
+from eo_forge.utils.landsat import (
+    LANDSAT5_BANDS_RESOLUTION,
+    LANDSAT8_BANDS_RESOLUTION,
+    get_clouds_landsat,
+)
+from eo_forge.utils.sentinel import (
+    SENTINEL2_BANDS_RESOLUTION,
+    get_clouds_msil1c,
+    get_granule_from_meta_sentinel,
+)
 from eo_forge.utils.utils import rem_trail_os_sep
 
 # libs

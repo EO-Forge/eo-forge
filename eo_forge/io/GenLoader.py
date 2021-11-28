@@ -17,15 +17,19 @@ import numpy as np
 import rasterio
 
 from eo_forge.utils.logger import update_logger
-from eo_forge.utils.raster_utils import (apply_isvalid_mask,
-                                         check_raster_clip_crs,
-                                         check_raster_shape_match,
-                                         check_resample, clip_raster,
-                                         get_raster_data_and_profile,
-                                         reproject_raster_north_south,
-                                         reproject_raster_to_bbox,
-                                         resample_raster, write_mem_raster,
-                                         write_raster)
+from eo_forge.utils.raster_utils import (
+    apply_isvalid_mask,
+    check_raster_clip_crs,
+    check_raster_shape_match,
+    check_resample,
+    clip_raster,
+    get_raster_data_and_profile,
+    reproject_raster_north_south,
+    reproject_raster_to_bbox,
+    resample_raster,
+    write_mem_raster,
+    write_raster,
+)
 from eo_forge.utils.shapes import set_buffer_on_gdf
 
 
@@ -42,6 +46,8 @@ class BaseGenericLoader:
     _supported_resolutions = tuple()
     _ordered_bands = tuple()
     _rasterio_driver = None
+    _filter_scl_acloud = None
+    _filter_scl_hcloud = None
 
     def __init__(
         self,
@@ -220,7 +226,7 @@ class BaseGenericLoader:
             )
             update_logger(
                 self.logger_,
-                f"resample: {resample_flag} - scale factor {scale_factor} - true pixel {true_pixel}",
+                f"resample: {resample_flag} / scale factor: {scale_factor} / true pixel: {true_pixel}",
                 "INFO",
             )
 
@@ -244,7 +250,7 @@ class BaseGenericLoader:
 
                 update_logger(
                     self.logger_,
-                    f"checking roi match - full match: {full_match} - area: {area}",
+                    f"checking roi match / full match: {full_match} / area: {area}",
                     "INFO",
                 )
 
@@ -294,7 +300,7 @@ class BaseGenericLoader:
                 if not full_match:
                     update_logger(
                         self.logger_,
-                        f"reprojecting raster to BBox - Not Full Match Case",
+                        f"reprojecting raster to BBox (Not Full Match Case)",
                         "INFO",
                     )
                     raster_dataset = reproject_raster_to_bbox(raster_dataset, roi_check)
@@ -310,7 +316,7 @@ class BaseGenericLoader:
                     )
                 update_logger(
                     self.logger_,
-                    f"no bbox - full match: {full_match} - area: {area}",
+                    f"no bbox / full match: {full_match} / area: {area}",
                     "INFO",
                 )
 
@@ -318,12 +324,12 @@ class BaseGenericLoader:
             raster_dataset_mask = self._get_is_valid_data(raster_dataset)
 
             if calibrate:
-                update_logger(self.logger_, f"calibrating band {band}", "INFO")
+                update_logger(self.logger_, f"calibrating band", "INFO")
                 # Apply postprocessing (calibration)
                 raster_dataset = self.post_process_band(raster_dataset, band)
 
             if reproject:
-                update_logger(self.logger_, f"reprojecting band {band}", "INFO")
+                update_logger(self.logger_, f"reprojecting band", "INFO")
                 raster_dataset = reproject_raster_north_south(
                     raster_dataset, close=True
                 )
@@ -414,7 +420,7 @@ class BaseGenericLoader:
         )
         update_logger(
             self.logger_,
-            f"resample: {resample_flag} - scale factor {scale_factor} - true pixel {true_pixel}",
+            f"resample: {resample_flag} / scale factor: {scale_factor} / true pixel: {true_pixel}",
             "INFO",
         )
         if clipping_flag:
@@ -434,7 +440,7 @@ class BaseGenericLoader:
             )
             update_logger(
                 self.logger_,
-                f"checking roi match - full match: {full_match} - area: {area}",
+                f"checking roi match / full match: {full_match} / area: {area}",
                 "INFO",
             )
             if resample_flag:
@@ -481,7 +487,7 @@ class BaseGenericLoader:
             if not full_match:
                 update_logger(
                     self.logger_,
-                    f"reprojecting raster to BBox - Not Full Match Case",
+                    f"reprojecting raster to BBox (Not Full Match Case)",
                     "INFO",
                 )
                 raster_dataset = reproject_raster_to_bbox(raster_dataset, roi_check)
@@ -497,17 +503,17 @@ class BaseGenericLoader:
                 )
             update_logger(
                 self.logger_,
-                f"no bbox - full match: {full_match} - area: {area}",
+                f"no bbox / full match: {full_match} / area: {area}",
                 "INFO",
             )
 
         if calibrate:
-            update_logger(self.logger_, f"calibrating band {cloud_band}", "INFO")
+            update_logger(self.logger_, f"calibrating band", "INFO")
             # Apply postprocessing (calibration)
             raster_dataset = self.post_process_band(raster_dataset, cloud_band)
 
         if reproject:
-            update_logger(self.logger_, f"reprojecting band {cloud_band}", "INFO")
+            update_logger(self.logger_, f"reprojecting band", "INFO")
             raster_dataset = reproject_raster_north_south(raster_dataset, close=True)
 
         # Get Data
@@ -629,23 +635,23 @@ class BaseGenericLoader:
             match_flag = "TOTAL"
             write_end = ".TIF"
             update_logger(
-                self.logger_, f"Got Full Match (if applies) - no need to merge", "INFO"
+                self.logger_,
+                f"Full Match (No BBox or BBox full fits on image)",
+                "INFO",
             )
         else:
             write_end = "-PARTIAL.TIF"
             match_flag = "PARTIAL"
             update_logger(
                 self.logger_,
-                f"Got PARTIAL Match (if applies) - may be necessary to merge",
+                f"PARTIAL Match (BBox partial fits on image / if applies, it may be necessary to merge)",
                 "WARNING",
             )
 
         if not write_file:
             raster = write_mem_raster(data, **base_profile)
             file_ = None
-            update_logger(
-                self.logger_, f"Leaving raster processed data IN-MEMORY", "INFO"
-            )
+            update_logger(self.logger_, f"Writting raster data to: MEMORY", "INFO")
         else:
             file_ = os.path.join(
                 self.folder_proc_,
@@ -653,18 +659,24 @@ class BaseGenericLoader:
             )
             raster = write_raster(file_, data, **base_profile)
 
-            update_logger(
-                self.logger_, f"Writting raster processed data to {file_}", "INFO"
-            )
+            update_logger(self.logger_, f"Writting raster data to: {file_}", "INFO")
         # clean
         del data
 
         raster_cloud = None
         file_cloud = None
+        clouds_legacy = kwargs.get("clouds_legacy", True)
+        scl_filter = kwargs.get("scl_filter", self._filter_scl_hcloud)
         # Quality Band
         if process_clouds:
             cloud_raster = self._preprocess_clouds_mask(
-                metadata, **{"raster_base": raster, "no_data": 0}
+                metadata,
+                **{
+                    "raster_base": raster,
+                    "no_data": 0,
+                    "clouds_legacy": clouds_legacy,
+                    "scl_filter": scl_filter,
+                },
             )
             cloud_data, cloud_profile = self._get_cloud_mask(
                 cloud_raster, bbox=bbox, **kwargs
@@ -683,7 +695,7 @@ class BaseGenericLoader:
                 raster_cloud = write_mem_raster(cloud_data, **cloud_profile)
                 update_logger(
                     self.logger_,
-                    f"Leaving raster cloud processed data IN-MEMORY",
+                    f"Writting raster cloud data to: MEMORY",
                     "INFO",
                 )
             else:
@@ -694,7 +706,7 @@ class BaseGenericLoader:
                 raster_cloud = write_raster(file_cloud, cloud_data, **cloud_profile)
                 update_logger(
                     self.logger_,
-                    f"Writting raster cloud processed data to {file_cloud}",
+                    f"Writting raster cloud data to: {file_cloud}",
                     "INFO",
                 )
             # clean

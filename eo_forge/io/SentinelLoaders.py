@@ -18,11 +18,18 @@ from lxml import etree
 
 from eo_forge.io.GenLoader import BaseGenericLoader
 from eo_forge.utils.logger import update_logger
-from eo_forge.utils.raster_utils import (get_is_valid_mask, shapes2array,
-                                         write_mem_raster)
-from eo_forge.utils.sentinel import (SENTINEL2_BANDS_RESOLUTION,
-                                     SENTINEL2_SUPPORTED_RESOLUTIONS,
-                                     calibrate_sentinel2)
+from eo_forge.utils.raster_utils import (
+    get_is_valid_mask,
+    shapes2array,
+    write_mem_raster,
+)
+from eo_forge.utils.sentinel import (
+    SENTINEL2_BANDS_RESOLUTION,
+    SENTINEL2_SUPPORTED_RESOLUTIONS,
+    calibrate_s2_scl,
+    calibrate_sentinel2,
+    s2_metadata,
+)
 from eo_forge.utils.utils import walk_dir_files
 
 ######################################################################
@@ -73,12 +80,15 @@ class Sentinel2Loader(BaseGenericLoader):
     _supported_resolutions = SENTINEL2_SUPPORTED_RESOLUTIONS
     _ordered_bands = tuple(SENTINEL2_BANDS_RESOLUTION.keys())
     _rasterio_driver = "JP2OpenJPEG"
+    _filter_scl_hcloud = [1, 2, 3, 4, 5, 6, 7, 8, 10, 11]
+    _filter_scl_acloud = [1, 2, 4, 5, 6, 7, 11]
 
     def __init__(
         self,
         folder,
         bands=None,
-        resolution=20,
+        resolution=10,
+        level="l1c",
         bbox=None,
         logger=None,
         **kwargs,
@@ -94,6 +104,8 @@ class Sentinel2Loader(BaseGenericLoader):
             Desired resolution.
         bands: iterable
             List of bands to process
+        level: str
+            "l1c" or "l2a" processing levels
         """
         super().__init__(
             folder,
@@ -105,8 +117,12 @@ class Sentinel2Loader(BaseGenericLoader):
         )
         self.raw_metadata = None
         self.spacecraft = 2
+        assert level in ["l1c", "l2a"], "Level should be one of: l1c or l2a"
+        self.proc_level = level
         update_logger(
-            self.logger_, f"Running on Sentinel {self.spacecraft} data", "INFO"
+            self.logger_,
+            f"Running on Sentinel {self.spacecraft} / level {level} data",
+            "INFO",
         )
 
     def _read_metadata(self, product_path):
@@ -120,64 +136,11 @@ class Sentinel2Loader(BaseGenericLoader):
         - quantification_value: float.
         - product_time: datetime, product time.
         """
-
-        # Default values to be used when this information is not found in the metadata
-        metadata = dict(NODATA=0, SATURATED=65535, quantification_value=10000)
-
-        # Find metadata file
-        metadata_file = glob.glob(os.path.join(product_path, "MTD_*.xml"))
-        if len(metadata_file):
-            metadata_file = metadata_file[0]
-
-        if not os.path.isfile(metadata_file):
-            # Try old format metadata
-            metadata_file = glob.glob(os.path.join(product_path, "S2*_OPER_*.xml"))
-            if len(metadata_file):
-                metadata_file = os.path.join(product_path, metadata_file[0])
-            else:
-                raise RuntimeError(f"Metadata file not found in {product_path}")
-
-        tree = etree.parse(metadata_file)
-        root = tree.getroot()
-        images_elements = root.findall(".//Granule/IMAGE_FILE")
-
-        images_elements_txt = [element.text.strip() for element in images_elements]
-        band_files = {
-            element_txt.split("_")[-1]: os.path.join(product_path, f"{element_txt}.jp2")
-            for element_txt in images_elements_txt
-        }
-
-        metadata["band_files"] = band_files
-
-        # NODATA and SATURATED values
-        special_value_elements = root.findall(
-            ".//Product_Image_Characteristics/Special_Values"
-        )
-        for _element in special_value_elements:
-            value_type = _element.find("SPECIAL_VALUE_TEXT")
-            value_index = _element.find("SPECIAL_VALUE_INDEX")
-
-            if (value_type is not None) and (value_index is not None):
-                value_type = value_type.text.strip()
-                value_index = int(value_index.text.strip())
-                metadata[value_type] = value_index
-
-        quantif_value_element = root.find(".//QUANTIFICATION_VALUE")
-        if quantif_value_element is not None:
-            metadata["quantification_value"] = int(quantif_value_element.text.strip())
-
-        product_time = root.find(".//PRODUCT_START_TIME")
-        if product_time is not None:
-            metadata["product_time"] = datetime.strptime(
-                product_time.text.strip().split(".")[0], "%Y-%m-%dT%H:%M:%S"
-            )
+        s2meta_reader = s2_metadata()
+        if self.proc_level == "l1c":
+            metadata = s2meta_reader.read_metadata_l1c(product_path)
         else:
-            # If the timestamp is not present in the XML, use the SAFE dir name
-            safe_dir_timestamp = os.path.basename(product_path).split("_")[3]
-            metadata["product_time"] = datetime.strptime(
-                safe_dir_timestamp, "%Y%m%dT%H%M%S"
-            )
-
+            metadata = s2meta_reader.read_metadata_l2a(product_path, self.resolution)
         self.raw_metadata = metadata
         return metadata
 
@@ -220,17 +183,47 @@ class Sentinel2Loader(BaseGenericLoader):
     def _preprocess_clouds_mask(self, metadata, **kwargs):
         """Return Raster BQA."""
 
-        raster_base = kwargs["raster_base"]
-        nodata = kwargs["no_data"]
-        base_dir = metadata["product_path"]
+        # use legacy == True for gml or False for SCL
+        legacy_ = kwargs.get("clouds_legacy", True)
 
-        gpd_ = s2_cloud_preproc(base_dir)
-        if gpd_ is None:
-            array_ = np.zeros((raster_base.height, raster_base.width), dtype=rio.uint8)
+        if self.proc_level == "l1c" and legacy_ == False:
 
+            update_logger(
+                self.logger_,
+                f"Found Level {self.proc_level} and cloud_legacy {legacy_}, Forcing clouds_legacy to True (cloud mask from gml file)",
+                "WARNING",
+            )
+            legacy_ = True
+
+        if legacy_:
+            update_logger(
+                self.logger_, f"Pre-processing legacy cloud mask (gml file)", "INFO"
+            )
+            raster_base = kwargs["raster_base"]
+            nodata = kwargs["no_data"]
+            base_dir = metadata["product_path"]
+
+            gpd_ = s2_cloud_preproc(base_dir)
+            if gpd_ is None:
+                array_ = np.zeros(
+                    (raster_base.height, raster_base.width), dtype=rio.uint8
+                )
+
+            else:
+                array_ = shapes2array(gpd_, raster_base)
+
+            profile = raster_base.profile.copy()
+            profile.update({"count": 1, "nodata": nodata})
+            return write_mem_raster(array_[np.newaxis, ...], **profile)
         else:
-            array_ = shapes2array(gpd_, raster_base)
-
-        profile = raster_base.profile.copy()
-        profile.update({"count": 1, "nodata": nodata})
-        return write_mem_raster(array_[np.newaxis, ...], **profile)
+            update_logger(
+                self.logger_, f"Pre-processing SCL cloud mask (raster file)", "INFO"
+            )
+            raster_base = rio.open(metadata["band_files"]["SCL"])
+            filter_values = kwargs.get("scl_filter", self._filter_scl_hcloud)
+            update_logger(
+                self.logger_,
+                f"Preprocessing SCL filtering values: {filter_values}",
+                "INFO",
+            )
+        return calibrate_s2_scl(raster_base, filter_values)
