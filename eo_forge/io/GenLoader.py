@@ -172,7 +172,7 @@ class BaseGenericLoader:
 
         Other Parameters
         ----------------
-        bbox: sentinelhub.BBox or Geopandas Dataframe.
+        bbox: Geopandas Dataframe.
             Region of Interest.
         reproject: bool
             If True, reproject raster north-south if needed.
@@ -203,11 +203,10 @@ class BaseGenericLoader:
         -------
         base_bands_data: dict[band]=np.array
             Dictionary holding numpy arrays with the base bands data.
-        extra_bands: dict[band]=np.array
-            Dictionary holding numpy arrays with the TCI, BQA, or other products data
-            that are not considered base bands.
-        bbox: sentinelhub.BBox
-            Bounding box of the returned data.
+        base_bands_data_profile: dict[band]= dict
+            Dictionary holding dicts with the base bands data profiles.
+        base_bands_match_:dict[band]= list
+            Dictionary holding the band match and the corresponding match area
         """
 
         base_bands_data = {}
@@ -429,7 +428,7 @@ class BaseGenericLoader:
 
         Other Parameters
         ----------------
-        bbox: sentinelhub.BBox or Geopandas Dataframe.
+        bbox: Geopandas Dataframe.
             Region of Interest.
         reproject: bool
             If True, reproject raster north-south if needed.
@@ -655,7 +654,7 @@ class BaseGenericLoader:
 
         Other parameters
         ----------------
-        bbox: sentinelhub.BBox or None
+        bbox: Geopandas Dataframe or  None
             Bounding box of the patch. None (default) returns the entire scene.
         crop: bool
             Whether to crop the raster (True) to the extent of the bbox, or fill the
@@ -717,7 +716,6 @@ class BaseGenericLoader:
 
         ##
         # Store the base bands in a single array
-        # The bands order is the one expected by eolearn.
         ordered_bands = [
             band for band in self._ordered_bands if band in base_bands_data
         ]
