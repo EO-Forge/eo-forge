@@ -8,25 +8,31 @@ Generic loaders module
     BaseGenericLoader
 """
 import gc
-import logging
-import os
-import warnings
-from abc import abstractmethod
-
 import numpy as np
+import os
 import rasterio
+import warnings
+from abc import (
+    abstractmethod,
+)
 
-from eo_forge.utils.logger import update_logger
-from eo_forge.utils.raster_utils import (apply_isvalid_mask,
-                                         check_raster_clip_crs,
-                                         check_raster_shape_match,
-                                         check_resample, clip_raster,
-                                         get_raster_data_and_profile,
-                                         reproject_raster_north_south,
-                                         reproject_raster_to_bbox,
-                                         resample_raster, write_mem_raster,
-                                         write_raster)
-from eo_forge.utils.shapes import set_buffer_on_gdf
+from eo_forge import check_logger
+from eo_forge.utils.raster_utils import (
+    apply_isvalid_mask,
+    check_raster_clip_crs,
+    check_raster_shape_match,
+    check_resample,
+    clip_raster,
+    get_raster_data_and_profile,
+    reproject_raster_north_south,
+    reproject_raster_to_bbox,
+    resample_raster,
+    write_mem_raster,
+    write_raster,
+)
+from eo_forge.utils.shapes import (
+    set_buffer_on_gdf,
+)
 
 
 class BaseGenericLoader:
@@ -66,7 +72,8 @@ class BaseGenericLoader:
         bbox: None or geodataframe
             geodataframe with specified bounding box to crop around
         logger: None or logging module instance
-            logger to populate (if provided)
+            logger to populate (if provided). If None, a default logger is used that
+            print all the messages to the stdout.
 
         Attributes
         ----------
@@ -74,11 +81,9 @@ class BaseGenericLoader:
         bands
         resolution
         """
-        # init logger if any
-        assert logger is None or isinstance(
-            logger, logging.Logger
-        ), "None or logging instance are valid values for logger"
-        self.logger_ = logger
+
+        self.logger = check_logger(logger)
+        self.raw_metadata = {}
 
         if not os.path.isdir(folder):
             msg = f"folder {folder} does not exist"
@@ -104,7 +109,10 @@ class BaseGenericLoader:
                     self.bands.append(band)
 
     @abstractmethod
-    def _get_product_path(self, product_id):
+    def _get_product_path(
+        self,
+        product_id,
+    ):
         """
         Returns the local path where the product id is stored, relative to the archive's
         root folder. This path mimics exactly the Google Cloud storage structure.
@@ -112,16 +120,26 @@ class BaseGenericLoader:
         raise NotImplementedError
 
     @abstractmethod
-    def _read_metadata(self, product_path):
+    def _read_metadata(
+        self,
+        product_path,
+    ):
         """Returns a dictionary with the product metadata."""
         raise NotImplementedError
 
-    def post_process_band(self, raster, band):
+    def post_process_band(
+        self,
+        raster,
+        band,
+    ):
         """Postprocess the band data (ndarray input)."""
         return raster
 
     @abstractmethod
-    def _clean_product_id(self, product_id):
+    def _clean_product_id(
+        self,
+        product_id,
+    ):
         """Cleans product id."""
         raise NotImplementedError
 
@@ -131,7 +149,11 @@ class BaseGenericLoader:
         raise NotImplementedError
 
     @abstractmethod
-    def _preprocess_clouds_mask(self, product_path, **kwargs):
+    def _preprocess_clouds_mask(
+        self,
+        product_path,
+        **kwargs,
+    ):
         """Returns raster cloud mask."""
         raise NotImplementedError
 
@@ -192,17 +214,41 @@ class BaseGenericLoader:
         base_bands_data_profiles = {}
         base_bands_match_ = {}
 
-        enable_transform = kwargs.get("enable_transform", True)
-        crop = kwargs.pop("crop", True)
-        hard_bbox = kwargs.get("hard_bbox", False)
-        bbox = kwargs.get("bbox", self.bbox)
-        nodata = kwargs.get("nodata", 0)
-        reproject = kwargs.get("reproject", True)
-        all_touched = kwargs.get("all_touched", True)
-        calibrate = kwargs.get("calibrate", True)
+        enable_transform = kwargs.get(
+            "enable_transform",
+            True,
+        )
+        crop = kwargs.pop(
+            "crop",
+            True,
+        )
+        hard_bbox = kwargs.get(
+            "hard_bbox",
+            False,
+        )
+        bbox = kwargs.get(
+            "bbox",
+            self.bbox,
+        )
+        nodata = kwargs.get(
+            "nodata",
+            0,
+        )
+        reproject = kwargs.get(
+            "reproject",
+            True,
+        )
+        all_touched = kwargs.get(
+            "all_touched",
+            True,
+        )
+        calibrate = kwargs.get(
+            "calibrate",
+            True,
+        )
 
         clipping_flag = bbox is not None
-        update_logger(self.logger_, f"Using clipping flag: {clipping_flag}", "INFO")
+        self.logger.info(f"Using clipping flag: {clipping_flag}")
 
         for band in self.bands:
             band = band.upper()
@@ -210,18 +256,20 @@ class BaseGenericLoader:
 
             if len(data_file) == 0:
                 warnings.warn(f"No files found for the {band} band")
-            update_logger(self.logger_, f"PROCESSING band: {band}", "INFO")
+            self.logger.info(f"PROCESSING band: {band}")
 
-            raster_dataset = rasterio.open(data_file, driver=self._rasterio_driver)
+            raster_dataset = rasterio.open(
+                data_file,
+                driver=self._rasterio_driver,
+            )
 
             # Check if resampling is needed
-            resample_flag, scale_factor, true_pixel = check_resample(
-                raster_dataset, self.resolution
+            (resample_flag, scale_factor, true_pixel,) = check_resample(
+                raster_dataset,
+                self.resolution,
             )
-            update_logger(
-                self.logger_,
-                f"resample: {resample_flag} - scale factor {scale_factor} - true pixel {true_pixel}",
-                "INFO",
+            self.logger.info(
+                f"resample: {resample_flag} - scale factor {scale_factor} - true pixel {true_pixel}"
             )
 
             if clipping_flag:
@@ -234,28 +282,28 @@ class BaseGenericLoader:
                     roi_bbox,
                     enable_transform=enable_transform,
                 )
-
-                update_logger(self.logger_, f"checking  ROI", "INFO")
+                self.logger.info(f"checking  ROI")
 
                 # check match
-                full_match, area = check_raster_shape_match(
-                    raster_dataset, roi_check, enable_transform=enable_transform
+                (full_match, area,) = check_raster_shape_match(
+                    raster_dataset,
+                    roi_check,
+                    enable_transform=enable_transform,
                 )
 
-                update_logger(
-                    self.logger_,
-                    f"checking roi match - full match: {full_match} - area: {area}",
-                    "INFO",
+                self.logger.info(
+                    f"checking roi match - full match: {full_match} - area: {area}"
                 )
 
                 if resample_flag:
                     # Resample taking special care of the borders.
                     # Add a small buffer to the BBox to take into account the borders.
-                    update_logger(self.logger_, f"buffering BBox", "INFO")
+                    self.logger.info(f"buffering BBox")
                     roi_check_buffered = set_buffer_on_gdf(
-                        roi_check, buffer=5 * true_pixel
+                        roi_check,
+                        buffer=5 * true_pixel,
                     )
-                    update_logger(self.logger_, f"clipping with buffered BBox", "INFO")
+                    self.logger.info(f"clipping with buffered BBox")
                     # Pre-clip the raster with the buffered bbox.
                     raster_dataset = clip_raster(
                         raster_dataset,
@@ -266,11 +314,14 @@ class BaseGenericLoader:
                         hard_bbox=hard_bbox,
                         all_touched=all_touched,
                     )
-                    update_logger(self.logger_, f"resampling buffered BBox", "INFO")
+                    self.logger.info(f"resampling buffered BBox")
                     raster_dataset = resample_raster(
-                        raster_dataset, scale_factor, close=True
+                        raster_dataset,
+                        scale_factor,
+                        close=True,
                     )
-                    update_logger(self.logger_, f"clipping with Tight BBox", "INFO")
+
+                    self.logger.info(f"clipping with Tight BBox")
                     raster_dataset = clip_raster(
                         raster_dataset,
                         roi_check,
@@ -280,7 +331,7 @@ class BaseGenericLoader:
                         hard_bbox=hard_bbox,
                     )
                 else:
-                    update_logger(self.logger_, f"clipping with Tight BBox", "INFO")
+                    self.logger.info(f"clipping with Tight BBox")
                     # no resample just clip
                     raster_dataset = clip_raster(
                         raster_dataset,
@@ -292,59 +343,76 @@ class BaseGenericLoader:
                     )
 
                 if not full_match:
-                    update_logger(
-                        self.logger_,
-                        f"reprojecting raster to BBox - Not Full Match Case",
-                        "INFO",
+                    self.logger.info(
+                        f"reprojecting raster to BBox - Not Full Match Case"
                     )
-                    raster_dataset = reproject_raster_to_bbox(raster_dataset, roi_check)
+                    raster_dataset = reproject_raster_to_bbox(
+                        raster_dataset,
+                        roi_check,
+                    )
 
             else:
                 full_match = True
                 area = 1
                 # No BBOX
                 if resample_flag:
-                    update_logger(self.logger_, f"resampling full band", "INFO")
+                    self.logger.info(f"resampling full band")
                     raster_dataset = resample_raster(
-                        raster_dataset, scale_factor, close=True
+                        raster_dataset,
+                        scale_factor,
+                        close=True,
                     )
-                update_logger(
-                    self.logger_,
-                    f"no bbox - full match: {full_match} - area: {area}",
-                    "INFO",
-                )
+                self.logger.info(f"no bbox - full match: {full_match} - area: {area}")
 
             # get raster_dataset_mask
             raster_dataset_mask = self._get_is_valid_data(raster_dataset)
 
             if calibrate:
-                update_logger(self.logger_, f"calibrating band {band}", "INFO")
+                self.logger.info(f"calibrating band {band}")
                 # Apply postprocessing (calibration)
-                raster_dataset = self.post_process_band(raster_dataset, band)
+                raster_dataset = self.post_process_band(
+                    raster_dataset,
+                    band,
+                )
 
             if reproject:
-                update_logger(self.logger_, f"reprojecting band {band}", "INFO")
+                self.logger.info(f"reprojecting band {band}")
                 raster_dataset = reproject_raster_north_south(
-                    raster_dataset, close=True
+                    raster_dataset,
+                    close=True,
                 )
 
                 raster_dataset_mask = reproject_raster_north_south(
-                    raster_dataset_mask, close=True
+                    raster_dataset_mask,
+                    close=True,
                 )
 
-            raster_dataset = apply_isvalid_mask(raster_dataset, raster_dataset_mask)
+            raster_dataset = apply_isvalid_mask(
+                raster_dataset,
+                raster_dataset_mask,
+            )
 
             # Get Data
-            data, data_profile = get_raster_data_and_profile(raster_dataset)
+            (
+                data,
+                data_profile,
+            ) = get_raster_data_and_profile(raster_dataset)
 
             # keep just [n x m] dimensions
             base_bands_data[band] = data.squeeze()
             base_bands_data_profiles[band] = data_profile
-            base_bands_match_[band] = [full_match, area]
+            base_bands_match_[band] = [
+                full_match,
+                area,
+            ]
 
         # Help python a little bit with the memory management
         gc.collect()
-        return base_bands_data, base_bands_data_profiles, base_bands_match_
+        return (
+            base_bands_data,
+            base_bands_data_profiles,
+            base_bands_match_,
+        )
 
     def _get_cloud_mask(
         self,
@@ -394,28 +462,54 @@ class BaseGenericLoader:
             data_profile: raster cloud data profile
 
         """
-        cloud_band = kwargs.get("cloud_band", "BQA")
-        enable_transform = kwargs.get("enable_transform", True)
-        crop = kwargs.pop("crop", True)
-        hard_bbox = kwargs.get("hard_bbox", False)
-        bbox = kwargs.get("bbox", self.bbox)
-        nodata = kwargs.get("nodata", 0)
-        reproject = kwargs.get("reproject", True)
-        all_touched = kwargs.get("all_touched", True)
-        calibrate = kwargs.get("calibrate", True)
+        cloud_band = kwargs.get(
+            "cloud_band",
+            "BQA",
+        )
+        enable_transform = kwargs.get(
+            "enable_transform",
+            True,
+        )
+        crop = kwargs.pop(
+            "crop",
+            True,
+        )
+        hard_bbox = kwargs.get(
+            "hard_bbox",
+            False,
+        )
+        bbox = kwargs.get(
+            "bbox",
+            self.bbox,
+        )
+        nodata = kwargs.get(
+            "nodata",
+            0,
+        )
+        reproject = kwargs.get(
+            "reproject",
+            True,
+        )
+        all_touched = kwargs.get(
+            "all_touched",
+            True,
+        )
+        calibrate = kwargs.get(
+            "calibrate",
+            True,
+        )
 
         clipping_flag = bbox is not None
 
-        update_logger(self.logger_, f"Processing band: {cloud_band}", "INFO")
+        self.logger.info(f"Processing band: {cloud_band}")
 
         # Check if resampling is needed
-        resample_flag, scale_factor, true_pixel = check_resample(
-            raster_dataset, self.resolution
+        (resample_flag, scale_factor, true_pixel,) = check_resample(
+            raster_dataset,
+            self.resolution,
         )
-        update_logger(
-            self.logger_,
-            f"resample: {resample_flag} - scale factor {scale_factor} - true pixel {true_pixel}",
-            "INFO",
+        self.logger.info(
+            f"resample: {resample_flag} - scale factor {scale_factor} - true pixel {true_pixel}"
         )
         if clipping_flag:
             # Check BBOX
@@ -427,22 +521,25 @@ class BaseGenericLoader:
                 roi_bbox,
                 enable_transform=enable_transform,
             )
-            update_logger(self.logger_, f"checking ROI", "INFO")
+            self.logger.info(f"checking ROI")
             # check match
-            full_match, area = check_raster_shape_match(
-                raster_dataset, roi_check, enable_transform=enable_transform
+            (full_match, area,) = check_raster_shape_match(
+                raster_dataset,
+                roi_check,
+                enable_transform=enable_transform,
             )
-            update_logger(
-                self.logger_,
-                f"checking roi match - full match: {full_match} - area: {area}",
-                "INFO",
+            self.logger.info(
+                f"checking roi match - full match: {full_match} - area: {area}"
             )
             if resample_flag:
                 # Resample taking special care of the borders.
                 # Add a small buffer to the BBox to take into account the borders.
-                update_logger(self.logger_, f"buffering BBox", "INFO")
-                roi_check_buffered = set_buffer_on_gdf(roi_check, buffer=5 * true_pixel)
-                update_logger(self.logger_, f"clipping with buffered BBox", "INFO")
+                self.logger.info(f"buffering BBox")
+                roi_check_buffered = set_buffer_on_gdf(
+                    roi_check,
+                    buffer=5 * true_pixel,
+                )
+                self.logger.info(f"clipping with buffered BBox")
                 # Pre-clip the raster with the buffered bbox.
                 raster_dataset = clip_raster(
                     raster_dataset,
@@ -453,11 +550,13 @@ class BaseGenericLoader:
                     hard_bbox=hard_bbox,
                     all_touched=all_touched,
                 )
-                update_logger(self.logger_, f"resampling buffered BBox", "INFO")
+                self.logger.info(f"resampling buffered BBox")
                 raster_dataset = resample_raster(
-                    raster_dataset, scale_factor, close=True
+                    raster_dataset,
+                    scale_factor,
+                    close=True,
                 )
-                update_logger(self.logger_, f"clipping with Tight BBox", "INFO")
+                self.logger.info(f"clipping with Tight BBox")
                 raster_dataset = clip_raster(
                     raster_dataset,
                     roi_check,
@@ -467,7 +566,7 @@ class BaseGenericLoader:
                     hard_bbox=hard_bbox,
                 )
             else:
-                update_logger(self.logger_, f"clipping with Tight BBox", "INFO")
+                self.logger.info(f"clipping with Tight BBox")
                 # no resample just clip
                 raster_dataset = clip_raster(
                     raster_dataset,
@@ -479,43 +578,52 @@ class BaseGenericLoader:
                 )
 
             if not full_match:
-                update_logger(
-                    self.logger_,
-                    f"reprojecting raster to BBox - Not Full Match Case",
-                    "INFO",
+                self.logger.info(f"reprojecting raster to BBox - Not Full Match Case")
+                raster_dataset = reproject_raster_to_bbox(
+                    raster_dataset,
+                    roi_check,
                 )
-                raster_dataset = reproject_raster_to_bbox(raster_dataset, roi_check)
 
         else:
             full_match = True
             area = 1
             # No BBOX
             if resample_flag:
-                update_logger(self.logger_, f"resampling full band", "INFO")
+                self.logger.info(f"resampling full band")
                 raster_dataset = resample_raster(
-                    raster_dataset, scale_factor, close=True
+                    raster_dataset,
+                    scale_factor,
+                    close=True,
                 )
-            update_logger(
-                self.logger_,
-                f"no bbox - full match: {full_match} - area: {area}",
-                "INFO",
-            )
+            self.logger.info(f"no bbox - full match: {full_match} - area: {area}")
 
         if calibrate:
-            update_logger(self.logger_, f"calibrating band {cloud_band}", "INFO")
+            self.logger.info(f"calibrating band {cloud_band}")
             # Apply postprocessing (calibration)
-            raster_dataset = self.post_process_band(raster_dataset, cloud_band)
+            raster_dataset = self.post_process_band(
+                raster_dataset,
+                cloud_band,
+            )
 
         if reproject:
-            update_logger(self.logger_, f"reprojecting band {cloud_band}", "INFO")
-            raster_dataset = reproject_raster_north_south(raster_dataset, close=True)
+            self.logger.info(f"reprojecting band {cloud_band}")
+            raster_dataset = reproject_raster_north_south(
+                raster_dataset,
+                close=True,
+            )
 
         # Get Data
-        data, data_profile = get_raster_data_and_profile(raster_dataset)
+        (
+            data,
+            data_profile,
+        ) = get_raster_data_and_profile(raster_dataset)
 
         # Help python a little bit with the memory management
         gc.collect()
-        return data.astype(rasterio.ubyte), data_profile
+        return (
+            data.astype(rasterio.ubyte),
+            data_profile,
+        )
 
     def execute(
         self,
@@ -564,16 +672,27 @@ class BaseGenericLoader:
 
         self.folder_proc_ = folder_proc_
 
-        bbox = kwargs.pop("bbox", self.bbox)
+        bbox = kwargs.pop(
+            "bbox",
+            self.bbox,
+        )
 
         if os.path.isdir(product_id):
             product_path = product_id
-        elif os.path.isdir(os.path.join(self.archive_folder, product_id)):
-            product_path = os.path.join(self.archive_folder, product_id)
+        elif os.path.isdir(
+            os.path.join(
+                self.archive_folder,
+                product_id,
+            )
+        ):
+            product_path = os.path.join(
+                self.archive_folder,
+                product_id,
+            )
         else:
             product_path = self._get_product_path(product_id)
 
-        update_logger(self.logger_, f"Processing on {product_path} dir", "INFO")
+        self.logger.info(f"Processing on {product_path} dir")
 
         if not os.path.isdir(product_path):
             raise RuntimeError(
@@ -590,7 +709,11 @@ class BaseGenericLoader:
             base_bands_data,
             base_bands_data_profiles,
             base_band_match,
-        ) = self._get_bands_data(metadata, bbox=bbox, **kwargs)
+        ) = self._get_bands_data(
+            metadata,
+            bbox=bbox,
+            **kwargs,
+        )
 
         ##
         # Store the base bands in a single array
@@ -606,7 +729,10 @@ class BaseGenericLoader:
         _base_bands_match_ = [base_band_match[band] for band in ordered_bands]
 
         # [bands x n x m ] -> rasterio order
-        data = np.stack(_base_bands_data, axis=0)
+        data = np.stack(
+            _base_bands_data,
+            axis=0,
+        )
         data_dtype = _base_bands_data_profiles[0]["dtype"]
 
         # For export
@@ -628,34 +754,33 @@ class BaseGenericLoader:
             # all true
             match_flag = "TOTAL"
             write_end = ".TIF"
-            update_logger(
-                self.logger_, f"Got Full Match (if applies) - no need to merge", "INFO"
-            )
+            self.logger.info(f"Got Full Match (if applies) - no need to merge")
         else:
             write_end = "-PARTIAL.TIF"
             match_flag = "PARTIAL"
-            update_logger(
-                self.logger_,
-                f"Got PARTIAL Match (if applies) - may be necessary to merge",
-                "WARNING",
+            self.logger.warning(
+                f"Got PARTIAL Match (if applies) - may be necessary to merge"
             )
 
         if not write_file:
-            raster = write_mem_raster(data, **base_profile)
-            file_ = None
-            update_logger(
-                self.logger_, f"Leaving raster processed data IN-MEMORY", "INFO"
+            raster = write_mem_raster(
+                data,
+                **base_profile,
             )
+            file_ = None
+            self.logger.info(f"Leaving raster processed data IN-MEMORY")
         else:
             file_ = os.path.join(
                 self.folder_proc_,
                 product_id_cleaned + write_file + write_end,
             )
-            raster = write_raster(file_, data, **base_profile)
-
-            update_logger(
-                self.logger_, f"Writting raster processed data to {file_}", "INFO"
+            raster = write_raster(
+                file_,
+                data,
+                **base_profile,
             )
+
+            self.logger.info(f"Writting raster processed data to {file_}")
         # clean
         del data
 
@@ -664,10 +789,16 @@ class BaseGenericLoader:
         # Quality Band
         if process_clouds:
             cloud_raster = self._preprocess_clouds_mask(
-                metadata, **{"raster_base": raster, "no_data": 0}
+                metadata,
+                **{
+                    "raster_base": raster,
+                    "no_data": 0,
+                },
             )
-            cloud_data, cloud_profile = self._get_cloud_mask(
-                cloud_raster, bbox=bbox, **kwargs
+            (cloud_data, cloud_profile,) = self._get_cloud_mask(
+                cloud_raster,
+                bbox=bbox,
+                **kwargs,
             )
 
             # make raster_cloud
@@ -680,22 +811,25 @@ class BaseGenericLoader:
                 }
             )
             if not write_file:
-                raster_cloud = write_mem_raster(cloud_data, **cloud_profile)
-                update_logger(
-                    self.logger_,
+                raster_cloud = write_mem_raster(
+                    cloud_data,
+                    **cloud_profile,
+                )
+                self.logger.info(
                     f"Leaving raster cloud processed data IN-MEMORY",
-                    "INFO",
                 )
             else:
                 file_cloud = os.path.join(
                     self.folder_proc_,
                     product_id_cleaned + "_CLOUDS" + write_file + write_end,
                 )
-                raster_cloud = write_raster(file_cloud, cloud_data, **cloud_profile)
-                update_logger(
-                    self.logger_,
+                raster_cloud = write_raster(
+                    file_cloud,
+                    cloud_data,
+                    **cloud_profile,
+                )
+                self.logger.info(
                     f"Writting raster cloud processed data to {file_cloud}",
-                    "INFO",
                 )
             # clean
             del cloud_data

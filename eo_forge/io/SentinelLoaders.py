@@ -8,22 +8,22 @@ Sentinel loaders module
     s2_cloud_preproc
 """
 import glob
-import os
-from datetime import datetime
 
 import geopandas as gpd
 import numpy as np
+import os
 import rasterio as rio
+from datetime import datetime
 from lxml import etree
 
 from eo_forge.io.GenLoader import BaseGenericLoader
-from eo_forge.utils.logger import update_logger
 from eo_forge.utils.raster_utils import (get_is_valid_mask, shapes2array,
                                          write_mem_raster)
 from eo_forge.utils.sentinel import (SENTINEL2_BANDS_RESOLUTION,
                                      SENTINEL2_SUPPORTED_RESOLUTIONS,
                                      calibrate_sentinel2)
 from eo_forge.utils.utils import walk_dir_files
+
 
 ######################################################################
 
@@ -105,9 +105,8 @@ class Sentinel2Loader(BaseGenericLoader):
         )
         self.raw_metadata = None
         self.spacecraft = 2
-        update_logger(
-            self.logger_, f"Running on Sentinel {self.spacecraft} data", "INFO"
-        )
+
+        self.logger.info(f"Running on Sentinel {self.spacecraft} data")
 
     def _read_metadata(self, product_path):
         """
