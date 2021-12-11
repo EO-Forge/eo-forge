@@ -9,11 +9,11 @@ Lansat loaders module
 """
 
 import glob
+
 import os
+import rasterio
 import warnings
 from datetime import datetime
-
-import rasterio
 
 from eo_forge.io.GenLoader import BaseGenericLoader
 from eo_forge.utils.landsat import (
@@ -47,6 +47,7 @@ class LandsatLoader(BaseGenericLoader):
         spacecraft=5,
         bands=None,
         reflectance=True,
+        logger=None,
         **kwargs,
     ):
         """
@@ -82,9 +83,13 @@ class LandsatLoader(BaseGenericLoader):
             self.calibrate_func = calibrate_landsat5
 
         self.reflectance = reflectance
-        self.raw_metadata = None
+        self.raw_metadata = {}
 
-        super().__init__(folder, resolution=resolution, bands=bands, **kwargs)
+        super().__init__(
+            folder, resolution=resolution, bands=bands, logger=logger, **kwargs
+        )
+
+        self.logger.info(f"Running on Landsat {self.spacecraft} data")
 
     def _read_metadata(self, product_path):
         """
