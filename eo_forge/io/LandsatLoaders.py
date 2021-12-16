@@ -24,7 +24,6 @@ from eo_forge.utils.landsat import (
     calibrate_landsat8,
     calibrate_landsat_bqa,
 )
-from eo_forge.utils.logger import update_logger
 from eo_forge.utils.raster_utils import get_is_valid_mask
 
 
@@ -84,15 +83,13 @@ class LandsatLoader(BaseGenericLoader):
             self.calibrate_func = calibrate_landsat5
 
         self.reflectance = reflectance
-        self.raw_metadata = None
+        self.raw_metadata = {}
 
         super().__init__(
             folder, resolution=resolution, bands=bands, logger=logger, **kwargs
         )
-        #
-        update_logger(
-            self.logger_, f"Running on Landsat {self.spacecraft} data", "INFO"
-        )
+
+        self.logger.info(f"Running on Landsat {self.spacecraft} data")
 
     def _read_metadata(self, product_path):
         """

@@ -7,17 +7,12 @@ Sentinel loaders module
     Sentinel2Loader
     s2_cloud_preproc
 """
-import glob
-import os
-from datetime import datetime
-
 import geopandas as gpd
 import numpy as np
+import os
 import rasterio as rio
-from lxml import etree
 
 from eo_forge.io.GenLoader import BaseGenericLoader
-from eo_forge.utils.logger import update_logger
 from eo_forge.utils.raster_utils import (
     get_is_valid_mask,
     shapes2array,
@@ -26,11 +21,12 @@ from eo_forge.utils.raster_utils import (
 from eo_forge.utils.sentinel import (
     SENTINEL2_BANDS_RESOLUTION,
     SENTINEL2_SUPPORTED_RESOLUTIONS,
-    calibrate_s2_scl,
     calibrate_sentinel2,
     s2_metadata,
+    calibrate_s2_scl,
 )
 from eo_forge.utils.utils import walk_dir_files
+
 
 ######################################################################
 
@@ -119,11 +115,8 @@ class Sentinel2Loader(BaseGenericLoader):
         self.spacecraft = 2
         assert level in ["l1c", "l2a"], "Level should be one of: l1c or l2a"
         self.proc_level = level
-        update_logger(
-            self.logger_,
-            f"Running on Sentinel {self.spacecraft} / level {level} data",
-            "INFO",
-        )
+
+        self.logger.info(f"Running on Sentinel {self.spacecraft} data")
 
     def _read_metadata(self, product_path):
         """
@@ -174,10 +167,10 @@ class Sentinel2Loader(BaseGenericLoader):
         """Returns raster mask with valid data."""
         return get_is_valid_mask(
             raster,
-            filter_values=[
+            filter_values=(
                 self.metadata_["NODATA"],
                 self.metadata_["SATURATED"],
-            ],
+            ),
         )
 
     def _preprocess_clouds_mask(self, metadata, **kwargs):
@@ -187,18 +180,14 @@ class Sentinel2Loader(BaseGenericLoader):
         legacy_ = kwargs.get("clouds_legacy", True)
 
         if self.proc_level == "l1c" and legacy_ == False:
-
-            update_logger(
-                self.logger_,
-                f"Found Level {self.proc_level} and cloud_legacy {legacy_}, Forcing clouds_legacy to True (cloud mask from gml file)",
-                "WARNING",
+            self.logger.warning(
+                f"Found Level {self.proc_level} and cloud_legacy {legacy_}\n"
+                + f"Forcing clouds_legacy to True (cloud mask from gml file)",
             )
             legacy_ = True
 
         if legacy_:
-            update_logger(
-                self.logger_, f"Pre-processing legacy cloud mask (gml file)", "INFO"
-            )
+            self.logger.info(f"Pre-processing legacy cloud mask (gml file)")
             raster_base = kwargs["raster_base"]
             nodata = kwargs["no_data"]
             base_dir = metadata["product_path"]
@@ -216,14 +205,9 @@ class Sentinel2Loader(BaseGenericLoader):
             profile.update({"count": 1, "nodata": nodata})
             return write_mem_raster(array_[np.newaxis, ...], **profile)
         else:
-            update_logger(
-                self.logger_, f"Pre-processing SCL cloud mask (raster file)", "INFO"
-            )
+            self.logger.info(f"Pre-processing SCL cloud mask (raster file)")
+
             raster_base = rio.open(metadata["band_files"]["SCL"])
             filter_values = kwargs.get("scl_filter", self._filter_scl_hcloud)
-            update_logger(
-                self.logger_,
-                f"Preprocessing SCL filtering values: {filter_values}",
-                "INFO",
-            )
+            self.logger.info(f"Preprocessing SCL filtering values: {filter_values}")
         return calibrate_s2_scl(raster_base, filter_values)

@@ -12,20 +12,20 @@ Downloader module
 """
 
 import fnmatch
-import logging
+
 import os
+import pandas as pd
 import platform
 import queue
 import shutil
 import threading
+import tqdm
 import warnings
 from pathlib import Path
 from subprocess import run
 from tempfile import mkdtemp
 
-import pandas as pd
-import tqdm
-
+from eo_forge import check_logger
 from eo_forge.utils.landsat import (
     LANDSAT5_BANDS_RESOLUTION,
     LANDSAT8_BANDS_RESOLUTION,
@@ -38,9 +38,6 @@ from eo_forge.utils.sentinel import (
 )
 from eo_forge.utils.utils import rem_trail_os_sep
 
-# libs
-from .logger import update_logger
-
 
 class bucket_downloader:
     """
@@ -49,9 +46,15 @@ class bucket_downloader:
 
     def __init__(self, logger=None):
         """
-        :param logger=None
+        Constructor
+
+        Parameters
+        ----------
+        logger: None or logging module instance
+            logger to populate (if provided). If None, a default logger is used that
+            print all the messages to the stdout.
         """
-        self.logger_ = logger
+        self.logger = check_logger(logger)
 
     @staticmethod
     def gc_bucket_download(data_path, data_base):
@@ -79,49 +82,21 @@ class bucket_downloader:
             d_basename = os.path.basename(d)
             if os.path.isdir(os.path.join(data_base, d_basename)):
                 if force_download:
-                    update_logger(
-                        self.logger_,
-                        "Force Download of {} (dir already existed) ".format(d),
-                        "WARNING",
-                    )
+                    self.logger.warning(f"Forced download of {d} (dir already existed)")
                     stdout, stderr = self.gc_bucket_download(d, data_base)
                     if stderr:
-                        update_logger(
-                            self.logger_,
-                            "FAILED @ {} with error {}".format(d, stderr),
-                            "ERROR",
-                        )
+                        self.logger.error(f"FAILED @ {d} with error {stderr}")
                     if stdout:
-                        update_logger(
-                            self.logger_,
-                            "OK @ {} with msg {}".format(d, stdout),
-                            "INFO",
-                        )
+                        self.logger.info(f"OK @ {d} with msg {stdout}")
                 else:
-                    update_logger(
-                        self.logger_,
-                        "Dir {} already existed".format(d_basename),
-                        "INFO",
-                    )
+                    self.logger.info(f"Dir {d_basename} already existed")
             else:
-                update_logger(
-                    self.logger_,
-                    "Downloading {} ".format(d_basename),
-                    "INFO",
-                )
+                self.logger.info("Downloading {} ".format(d_basename))
                 stdout, stderr = self.gc_bucket_download(d, data_base)
                 if stderr:
-                    update_logger(
-                        self.logger_,
-                        "FAILED @ {} with error {}".format(d, stderr),
-                        "ERROR",
-                    )
+                    self.logger.error("FAILED @ {} with error {}".format(d, stderr))
                 if stdout:
-                    update_logger(
-                        self.logger_,
-                        "OK @ {} with msg {}".format(d, stdout),
-                        "INFO",
-                    )
+                    self.logger.info("OK @ {} with msg {}".format(d, stdout))
 
 
 class gcSatImg:
@@ -152,15 +127,12 @@ class gcSatImg:
         boto_config: Path or None
             path to BOTO_CONFIG file. If None will try to
             use $HOME/.boto as location
-
-        Returns
-        -------
-        None
+        logger: None or logging module instance
+            logger to populate (if provided). If None, a default logger is used that
+            print all the messages to the stdout.
         """
-        assert logger is None or isinstance(
-            logger, logging.Logger
-        ), "None or logging instance are valid values for logger"
-        self.logger_ = logger
+
+        self.logger = check_logger(logger)
 
         if spacecraft == "L8":
             self.base_url = self.BASE_LANDSAT8
@@ -178,7 +150,7 @@ class gcSatImg:
             raise ValueError("EITHER L8,L5,S2")
 
         self.spacecraft = spacecraft
-        update_logger(self.logger_, f"Running on spacecraft {self.spacecraft}", "INFO")
+        self.logger.info(f"Running on spacecraft {self.spacecraft}")
         if boto_config:
             os.environ["BOTO_CONFIG"] = boto_config
             self.boto_path = os.getenv("BOTO_CONFIG")
@@ -187,7 +159,7 @@ class gcSatImg:
                 self.boto_path = Path(os.getenv("HOME")) / ".boto"
             else:
                 self.boto_path = Path(os.getenv("USERPROFILE")) / ".boto"
-        update_logger(self.logger_, f"Setting boto path to: {self.boto_path}", "INFO")
+        self.logger.info(f"Setting boto path to: {self.boto_path}")
 
     def gcImagesCheck(self, url_filler):
         """
@@ -208,15 +180,25 @@ class gcSatImg:
         BASE_SAT = self.base_url
         URL = BASE_SAT.format(*url_filler)
         cmd = ["gsutil", "ls", URL]
+
+        self.logger.debug(f"Running: {' '.join(cmd)}")
         p = run(cmd, capture_output=True, text=True)
-        #
-        update_logger(self.logger_, f"Checking bucket: {cmd}", "DEBUG")
+
+        self.logger.info(f"Checking bucket: {' '.join(cmd)}")
         if p.returncode == 0:
             stdout = p.stdout
             stderr = ""
         else:
             stdout = p.stdout
             stderr = p.stderr
+            self.logger.error(f"gsutil returned a non-zero exit code.")
+            self.logger.error(f"gsutil error: {stderr}")
+
+            if "ServiceException: 401" in stderr + stdout:
+                self.logger.error(
+                    f"It seems that you need to authorize gsutil to access Google Cloud.\n"
+                    'Try running "gsutil config"'
+                )
 
         if stdout and p.returncode == 0:
             self.sat_imgs_flag = True
@@ -262,14 +244,14 @@ class gcSatImg:
         """
         dir_ = mkdtemp()
         cloud_ = []
-        for _, r in pd_filt.iterrows():
+        for i, r in pd_filt.iterrows():
             prod_id = r["product-id"]
             bucket_path = r["base-url"]
             local_path = dir_  # to dump files
             remote_path = self.build_metadata_path(bucket_path, prod_id)
-            #
+
             cmd = ["gsutil", "cp", remote_path, local_path]
-            update_logger(self.logger_, f"Copying meta with cmd: {cmd}", "DEBUG")
+            self.logger.debug(f"Copying meta with cmd: {' '.join(cmd)}")
             p = run(cmd, capture_output=True, text=True)
             if p.returncode == 0:
                 file_metadata = self.build_metadata_path(local_path, prod_id)
@@ -279,10 +261,8 @@ class gcSatImg:
                     os.remove(file_metadata)
             else:
                 cloud_.append(None)
-                update_logger(
-                    self.logger_,
-                    f"FAIL @ {remote_path} appending None as cloud level",
-                    "WARNING",
+                self.logger.warning(
+                    f"FAIL @ {remote_path} appending None as cloud level"
                 )
         shutil.rmtree(dir_)
         pd_filt["clouds"] = cloud_
@@ -326,7 +306,7 @@ class gcSatImg:
         return pd_
 
     @staticmethod
-    def filt_dates(pd_, dates=[None, None], date_col="date"):
+    def filt_dates(pd_, dates=(None, None), date_col="date"):
         """
         Filter dates on dataframe.
 
@@ -390,15 +370,21 @@ class gcSatImg:
         Parameters
         ----------
         filters: list
-            filters to use if [] (empty list), it will not filter on name
-            if [key1,key2,etc] it will be joined as ''.join([key1,key2,etc]) and used as pattern
-            by fnmatch.fnmatch
+            Filters to use. No filters are applied if filters=[] (empty list) or None.
+            Otherwise, the filters are applied on the names.
+            E.g., filters=[key1,key2,etc] is joined as ''.join([key1,key2,etc]) and then
+            used as pattern by fnmatch.fnmatch.
         dates: list
-            if [None,None] data is returned as is
-            else [yyyy-mm-dd,yyyy-mm-dd] is expected
+            If [None,None] data is returned as it is.
+            Else [yyyy-mm-dd,yyyy-mm-dd] is expected
         clouds: bool
             flag to try to obtain clouds from metadata
         """
+        if filters is None:
+            filters = []
+        if dates is None:
+            dates = [None, None]
+
         filtered_imgs = []
         if self.sat_imgs_flag:
             for scene_path_dir in self.sat_imgs:
@@ -462,12 +448,21 @@ class bucket_images_downloader:
     """
 
     def __init__(self, spacecraft="L8", bands=None, logger=None):
-        """Constructor."""
+        """
+        Constructor.
 
-        assert logger is None or isinstance(
-            logger, logging.Logger
-        ), "None or logging instance are valid values for logger"
-        self.logger_ = logger
+        Parameters
+        ----------
+        spacecraft: int
+            Landsat spacecraft (5 or 8).
+        bands: iterable
+            List of bands to process.
+        logger: None or logging module instance
+            logger to populate (if provided). If None, a default logger is used that
+            print all the messages to the stdout.
+        """
+
+        self.logger = check_logger(logger)
 
         if spacecraft not in ("L5", "L8", "S2"):
             raise ValueError(
@@ -475,8 +470,9 @@ class bucket_images_downloader:
                 f'Spacecraft received: "{spacecraft}"'
             )
         self.spacecraft = spacecraft
-        update_logger(self.logger_, f"Running on spacecraft {self.spacecraft}", "INFO")
+        self.logger.info(f"Running on spacecraft {self.spacecraft}")
 
+        self.logger_ = logger
         if spacecraft == "L8":
             self._ordered_bands = tuple(LANDSAT8_BANDS_RESOLUTION.keys())
             self._extra_bands = ["BQA"]
@@ -499,50 +495,55 @@ class bucket_images_downloader:
                 else:
                     self.bands.append(band)
 
-        update_logger(self.logger_, f"Requesting bands {self.bands}", "INFO")
+        self.logger.info(f"Requesting bands {self.bands}")
 
-    def build_datapath_landsat(self, bucket_list=[], bucket_arxive=[], bqa_clouds=True):
+    def build_datapath_landsat(
+        self, bucket_list=[], bucket_archive=[], bqa_clouds=True
+    ):
         bucket_atomic = []
-        bucket_atomic_arxive = []
-        for bi, ba in zip(bucket_list, bucket_arxive):
+        bucket_atomic_archive = []
+        for bi, ba in zip(bucket_list, bucket_archive):
             bi = rem_trail_os_sep(bi)
             bi_base = os.path.basename(bi)
             for b in self.bands:
                 bucket_path = f"{bi}/{bi_base}_{b}.TIF"
                 bucket_atomic.append(bucket_path)
-                bucket_atomic_arxive.append(ba)
+                bucket_atomic_archive.append(ba)
             if bqa_clouds:
                 for b in self._extra_bands:
                     bucket_path = f"{bi}/{bi_base}_{b}.TIF"
                     bucket_atomic.append(bucket_path)
-                    bucket_atomic_arxive.append(ba)
+                    bucket_atomic_archive.append(ba)
             bucket_atomic.append(f"{bi}/{bi_base}_MTL.txt")
-            bucket_atomic_arxive.append(ba)
+            bucket_atomic_archive.append(ba)
 
-        return bucket_atomic, bucket_atomic_arxive
+        return bucket_atomic, bucket_atomic_archive
 
     def build_datapath_sentinel2(
-        self, bucket_list=[], bucket_arxive=[], bqa_clouds=True, keep_safe=True
+        self, bucket_list=None, bucket_archive=None, bqa_clouds=True, keep_safe=True
     ):
         """Build datapath for Sentinel2.
 
         Parameters
         ----------
-            bucket_list: list
-                list of gcp url with images
-            bucket_arxive: list
-                list with local path to download
-            bqa_clouds: bool
-                if cloud mas is required
+        bucket_list: list
+            List of gcp url with images. Empty list by default.
+        bucket_archive: list
+            List with local path to download. Empty list by default.
+        bqa_clouds: bool
+            If cloud mas is required
 
-
-
-        Note
+        Notes
+        -----
         PRODUCT_ID/GRANULE/{GRANULE_ID}/IMG_DATA/{IMAGE_BASE}_{BANDS}.jp2
         PRODUCT_ID/GRANULE/{GRANULE_ID}/QI_DATA/MSK_CLOUDS_B00.gml
-
-
         """
+        if bucket_list is None:
+            bucket_list = list()
+
+        if bucket_archive is None:
+            bucket_archive = list()
+
         SENTINEL2_URL_BANDS = "{}/GRANULE/{}/IMG_DATA/{}_{}.jp2"
         SENTINEL2_URL_CLOUDS = "{}/GRANULE/{}/QI_DATA/MSK_CLOUDS_B00.gml"
         SENTINEL2_META = "{}/MTD_MSIL1C.xml"
@@ -555,11 +556,11 @@ class bucket_images_downloader:
             SENTINEL2_LOCAL_CLOUDS = "{}/"
 
         bucket_atomic = []
-        bucket_atomic_arxive = []
-        for bi, ba in zip(bucket_list, bucket_arxive):
+        bucket_atomic_archive = []
+        for bi, ba in zip(bucket_list, bucket_archive):
 
             bi = rem_trail_os_sep(bi)
-            bi_base = os.path.basename(bi)
+
             # get metadatafile
             granulei, image_basei = get_granule_from_meta_sentinel(bi)
             for b in self.bands:
@@ -572,7 +573,7 @@ class bucket_images_downloader:
                 else:
                     local_img_data = SENTINEL2_LOCAL_BANDS.format(ba)
 
-                bucket_atomic_arxive.append(local_img_data)
+                bucket_atomic_archive.append(local_img_data)
                 # check local dir
                 if os.path.isdir(local_img_data):
                     pass
@@ -587,7 +588,7 @@ class bucket_images_downloader:
                 else:
                     local_qi = SENTINEL2_LOCAL_CLOUDS.format(ba)
 
-                bucket_atomic_arxive.append(local_qi)
+                bucket_atomic_archive.append(local_qi)
 
                 if os.path.isdir(local_qi):
                     pass
@@ -595,46 +596,47 @@ class bucket_images_downloader:
                     os.makedirs(local_qi, exist_ok=True)
 
             bucket_atomic.append(SENTINEL2_META.format(bi))
-            bucket_atomic_arxive.append(ba)
+            bucket_atomic_archive.append(ba)
 
-        return bucket_atomic, bucket_atomic_arxive
+        return bucket_atomic, bucket_atomic_archive
 
     def execute(
         self,
-        bucket_cases=[],
-        arxive="./",
+        bucket_cases=None,
+        archive="./",
         bqa_clouds=True,
         max_proc_thread=1,
         force_download=False,
     ):
+        if bucket_cases is None:
+            bucket_cases = list()
         bucket_cases_proc = []
-        bucket_arxive_proc = []
+        bucket_archive_proc = []
         for bki in bucket_cases:
             bki = rem_trail_os_sep(bki)
             bki_base = os.path.basename(bki)
-            arxive_i = os.path.join(arxive, bki_base)
-            if not os.path.isdir(arxive_i):
-                os.makedirs(arxive_i)
+            archive_i = os.path.join(archive, bki_base)
+            if not os.path.isdir(archive_i):
+                os.makedirs(archive_i)
                 bucket_cases_proc.append(bki)
-                bucket_arxive_proc.append(arxive_i)
-            elif os.path.isdir(arxive_i) and force_download:
-                bucket_cases_proc.append(bki)
-                bucket_arxive_proc.append(arxive_i)
-                update_logger(
-                    self.logger_,
-                    "Force Download of {} (dir already existed) ".format(arxive_i),
-                    "WARNING",
-                )
+                bucket_archive_proc.append(archive_i)
             else:
-                pass
+                if force_download:
+                    bucket_cases_proc.append(bki)
+                    bucket_archive_proc.append(archive_i)
+                    self.logger.warning(
+                        f"Force Download of {archive_i} (dir already existed)."
+                    )
+                else:
+                    self.logger.info(f"Skipping {archive_i} (dir already existed).")
 
         if self.spacecraft in ("L5", "L8"):
             data_path_atomic, data_base_atomic = self.build_datapath_landsat(
-                bucket_cases_proc, bucket_arxive_proc, bqa_clouds
+                bucket_cases_proc, bucket_archive_proc, bqa_clouds
             )
         else:
             data_path_atomic, data_base_atomic = self.build_datapath_sentinel2(
-                bucket_cases_proc, bucket_arxive_proc, bqa_clouds
+                bucket_cases_proc, bucket_archive_proc, bqa_clouds
             )
 
         i_cases = []
@@ -645,11 +647,7 @@ class bucket_images_downloader:
         q = queue.Queue(maxsize=len(i_cases))
         for qc in i_cases:
             q.put(qc)
-            update_logger(
-                self.logger_,
-                f"Queueing cmd for download: {qc}",
-                "DEBUG",
-            )
+            self.logger.debug(f"Queueing cmd for download: {' '.join(qc)}")
 
         for i in range(max_proc_thread):
             t = ThreadUrlDownload(q)
