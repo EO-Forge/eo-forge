@@ -9,11 +9,11 @@ Lansat loaders module
 """
 
 import glob
-
 import os
-import rasterio
 import warnings
 from datetime import datetime
+
+import rasterio
 
 from eo_forge.io.GenLoader import BaseGenericLoader
 from eo_forge.utils.landsat import (

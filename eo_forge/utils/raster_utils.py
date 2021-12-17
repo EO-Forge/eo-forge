@@ -132,7 +132,7 @@ def clip_raster(
     )
     if close:
         raster.close()
-    write_mem_raster(data, **profile)
+
     return write_mem_raster(data, **profile)
 
 

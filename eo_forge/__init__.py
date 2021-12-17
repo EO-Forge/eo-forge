@@ -55,8 +55,9 @@ def set_default_logger(logger=None):
             default_logger.setLevel(logging.DEBUG)
             handler = logging.StreamHandler(sys.stdout)
 
-            fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s",
-                                    datefmt="%Y/%m/%d %H:%M:%S")
+            fmt = logging.Formatter(
+                "%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y/%m/%d %H:%M:%S"
+            )
 
             handler.setFormatter(fmt)
 

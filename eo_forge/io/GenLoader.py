@@ -86,8 +86,7 @@ class BaseGenericLoader:
         self.raw_metadata = {}
 
         if not os.path.isdir(folder):
-            msg = f"folder {folder} does not exist"
-            raise ValueError(msg)
+            raise ValueError(f"folder {folder} does not exist")
 
         self.archive_folder = folder
         self.bbox = bbox
@@ -109,10 +108,7 @@ class BaseGenericLoader:
                     self.bands.append(band)
 
     @abstractmethod
-    def _get_product_path(
-        self,
-        product_id,
-    ):
+    def _get_product_path(self, product_id):
         """
         Returns the local path where the product id is stored, relative to the archive's
         root folder. This path mimics exactly the Google Cloud storage structure.
@@ -120,26 +116,16 @@ class BaseGenericLoader:
         raise NotImplementedError
 
     @abstractmethod
-    def _read_metadata(
-        self,
-        product_path,
-    ):
+    def _read_metadata(self, product_path):
         """Returns a dictionary with the product metadata."""
         raise NotImplementedError
 
-    def post_process_band(
-        self,
-        raster,
-        band,
-    ):
+    def post_process_band(self, raster, band):
         """Postprocess the band data (ndarray input)."""
         return raster
 
     @abstractmethod
-    def _clean_product_id(
-        self,
-        product_id,
-    ):
+    def _clean_product_id(self, product_id):
         """Cleans product id."""
         raise NotImplementedError
 
@@ -149,11 +135,7 @@ class BaseGenericLoader:
         raise NotImplementedError
 
     @abstractmethod
-    def _preprocess_clouds_mask(
-        self,
-        product_path,
-        **kwargs,
-    ):
+    def _preprocess_clouds_mask(self, product_path, **kwargs):
         """Returns raster cloud mask."""
         raise NotImplementedError
 
@@ -213,38 +195,14 @@ class BaseGenericLoader:
         base_bands_data_profiles = {}
         base_bands_match_ = {}
 
-        enable_transform = kwargs.get(
-            "enable_transform",
-            True,
-        )
-        crop = kwargs.pop(
-            "crop",
-            True,
-        )
-        hard_bbox = kwargs.get(
-            "hard_bbox",
-            False,
-        )
-        bbox = kwargs.get(
-            "bbox",
-            self.bbox,
-        )
-        nodata = kwargs.get(
-            "nodata",
-            0,
-        )
-        reproject = kwargs.get(
-            "reproject",
-            True,
-        )
-        all_touched = kwargs.get(
-            "all_touched",
-            True,
-        )
-        calibrate = kwargs.get(
-            "calibrate",
-            True,
-        )
+        enable_transform = kwargs.get("enable_transform", True)
+        crop = kwargs.pop("crop", True)
+        hard_bbox = kwargs.get("hard_bbox", False)
+        bbox = kwargs.get("bbox", self.bbox)
+        nodata = kwargs.get("nodata", 0)
+        reproject = kwargs.get("reproject", True)
+        all_touched = kwargs.get("all_touched", True)
+        calibrate = kwargs.get("calibrate", True)
 
         clipping_flag = bbox is not None
         self.logger.info(f"Using clipping flag: {clipping_flag}")
@@ -461,42 +419,15 @@ class BaseGenericLoader:
             data_profile: raster cloud data profile
 
         """
-        cloud_band = kwargs.get(
-            "cloud_band",
-            "BQA",
-        )
-        enable_transform = kwargs.get(
-            "enable_transform",
-            True,
-        )
-        crop = kwargs.pop(
-            "crop",
-            True,
-        )
-        hard_bbox = kwargs.get(
-            "hard_bbox",
-            False,
-        )
-        bbox = kwargs.get(
-            "bbox",
-            self.bbox,
-        )
-        nodata = kwargs.get(
-            "nodata",
-            0,
-        )
-        reproject = kwargs.get(
-            "reproject",
-            True,
-        )
-        all_touched = kwargs.get(
-            "all_touched",
-            True,
-        )
-        calibrate = kwargs.get(
-            "calibrate",
-            True,
-        )
+        cloud_band = kwargs.get("cloud_band", "BQA")
+        enable_transform = kwargs.get("enable_transform", True)
+        crop = kwargs.pop("crop", True)
+        hard_bbox = kwargs.get("hard_bbox", False)
+        bbox = kwargs.get("bbox", self.bbox)
+        nodata = kwargs.get("nodata", 0)
+        reproject = kwargs.get("reproject", True)
+        all_touched = kwargs.get("all_touched", True)
+        calibrate = kwargs.get("calibrate", True)
 
         clipping_flag = bbox is not None
 
@@ -590,39 +521,24 @@ class BaseGenericLoader:
             if resample_flag:
                 self.logger.info(f"resampling full band")
                 raster_dataset = resample_raster(
-                    raster_dataset,
-                    scale_factor,
-                    close=True,
+                    raster_dataset, scale_factor, close=True
                 )
             self.logger.info(f"no bbox - full match: {full_match} - area: {area}")
 
         if calibrate:
             self.logger.info(f"calibrating band {cloud_band}")
             # Apply postprocessing (calibration)
-            raster_dataset = self.post_process_band(
-                raster_dataset,
-                cloud_band,
-            )
+            raster_dataset = self.post_process_band(raster_dataset, cloud_band)
 
         if reproject:
-            self.logger.info(f"reprojecting band {cloud_band}")
-            raster_dataset = reproject_raster_north_south(
-                raster_dataset,
-                close=True,
-            )
+            raster_dataset = reproject_raster_north_south(raster_dataset, close=True)
 
         # Get Data
-        (
-            data,
-            data_profile,
-        ) = get_raster_data_and_profile(raster_dataset)
+        data, data_profile = get_raster_data_and_profile(raster_dataset)
 
         # Help python a little bit with the memory management
         gc.collect()
-        return (
-            data.astype(rasterio.ubyte),
-            data_profile,
-        )
+        return data.astype(rasterio.ubyte), data_profile
 
     def execute(
         self,
@@ -671,23 +587,12 @@ class BaseGenericLoader:
 
         self.folder_proc_ = folder_proc_
 
-        bbox = kwargs.pop(
-            "bbox",
-            self.bbox,
-        )
+        bbox = kwargs.pop("bbox", self.bbox)
 
         if os.path.isdir(product_id):
             product_path = product_id
-        elif os.path.isdir(
-            os.path.join(
-                self.archive_folder,
-                product_id,
-            )
-        ):
-            product_path = os.path.join(
-                self.archive_folder,
-                product_id,
-            )
+        elif os.path.isdir(os.path.join(self.archive_folder, product_id)):
+            product_path = os.path.join(self.archive_folder, product_id)
         else:
             product_path = self._get_product_path(product_id)
 
@@ -708,14 +613,11 @@ class BaseGenericLoader:
             base_bands_data,
             base_bands_data_profiles,
             base_band_match,
-        ) = self._get_bands_data(
-            metadata,
-            bbox=bbox,
-            **kwargs,
-        )
+        ) = self._get_bands_data(metadata, bbox=bbox, **kwargs)
 
         ##
         # Store the base bands in a single array
+        # The bands order is the one expected by eolearn.
         ordered_bands = [
             band for band in self._ordered_bands if band in base_bands_data
         ]
@@ -727,10 +629,7 @@ class BaseGenericLoader:
         _base_bands_match_ = [base_band_match[band] for band in ordered_bands]
 
         # [bands x n x m ] -> rasterio order
-        data = np.stack(
-            _base_bands_data,
-            axis=0,
-        )
+        data = np.stack(_base_bands_data, axis=0)
         data_dtype = _base_bands_data_profiles[0]["dtype"]
 
         # For export
@@ -761,10 +660,7 @@ class BaseGenericLoader:
             )
 
         if not write_file:
-            raster = write_mem_raster(
-                data,
-                **base_profile,
-            )
+            raster = write_mem_raster(data, **base_profile)
             file_ = None
             self.logger.info(f"Leaving raster processed data IN-MEMORY")
         else:
@@ -772,11 +668,7 @@ class BaseGenericLoader:
                 self.folder_proc_,
                 product_id_cleaned + write_file + write_end,
             )
-            raster = write_raster(
-                file_,
-                data,
-                **base_profile,
-            )
+            raster = write_raster(file_, data, **base_profile)
 
             self.logger.info(f"Writting raster processed data to {file_}")
         # clean
@@ -787,16 +679,10 @@ class BaseGenericLoader:
         # Quality Band
         if process_clouds:
             cloud_raster = self._preprocess_clouds_mask(
-                metadata,
-                **{
-                    "raster_base": raster,
-                    "no_data": 0,
-                },
+                metadata, **{"raster_base": raster, "no_data": 0}
             )
-            (cloud_data, cloud_profile,) = self._get_cloud_mask(
-                cloud_raster,
-                bbox=bbox,
-                **kwargs,
+            cloud_data, cloud_profile = self._get_cloud_mask(
+                cloud_raster, bbox=bbox, **kwargs
             )
 
             # make raster_cloud
@@ -809,10 +695,8 @@ class BaseGenericLoader:
                 }
             )
             if not write_file:
-                raster_cloud = write_mem_raster(
-                    cloud_data,
-                    **cloud_profile,
-                )
+                raster_cloud = write_mem_raster(cloud_data, **cloud_profile)
+
                 self.logger.info(
                     f"Leaving raster cloud processed data IN-MEMORY",
                 )
@@ -821,11 +705,8 @@ class BaseGenericLoader:
                     self.folder_proc_,
                     product_id_cleaned + "_CLOUDS" + write_file + write_end,
                 )
-                raster_cloud = write_raster(
-                    file_cloud,
-                    cloud_data,
-                    **cloud_profile,
-                )
+                raster_cloud = write_raster(file_cloud, cloud_data, **cloud_profile)
+
                 self.logger.info(
                     f"Writting raster cloud processed data to {file_cloud}",
                 )

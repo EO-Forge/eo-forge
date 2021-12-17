@@ -25,12 +25,12 @@ from pathlib import Path
 from subprocess import run
 from tempfile import mkdtemp
 
+from eo_forge import check_logger
 from eo_forge.utils.landsat import (
     LANDSAT5_BANDS_RESOLUTION,
     LANDSAT8_BANDS_RESOLUTION,
     get_clouds_landsat,
 )
-from eo_forge import check_logger
 from eo_forge.utils.sentinel import (
     SENTINEL2_BANDS_RESOLUTION,
     get_clouds_msil1c,
@@ -171,6 +171,11 @@ class gcSatImg:
             list with parameter for platforms,
             landsat -> [path: str, row:str]
             sentinel2 -> [UTM_ZONE:str, LATITUDE_BAND:str, GRID_SQUARE:str]
+
+        Returns
+        -------
+        None
+
         """
         BASE_SAT = self.base_url
         URL = BASE_SAT.format(*url_filler)
@@ -189,12 +194,11 @@ class gcSatImg:
             self.logger.error(f"gsutil returned a non-zero exit code.")
             self.logger.error(f"gsutil error: {stderr}")
 
-            if "ServiceException: 401" in stderr+stdout:
+            if "ServiceException: 401" in stderr + stdout:
                 self.logger.error(
                     f"It seems that you need to authorize gsutil to access Google Cloud.\n"
-                    "Try running \"gsutil config\""
+                    'Try running "gsutil config"'
                 )
-
 
         if stdout and p.returncode == 0:
             self.sat_imgs_flag = True
@@ -240,7 +244,7 @@ class gcSatImg:
         """
         dir_ = mkdtemp()
         cloud_ = []
-        for _, r in pd_filt.iterrows():
+        for i, r in pd_filt.iterrows():
             prod_id = r["product-id"]
             bucket_path = r["base-url"]
             local_path = dir_  # to dump files
@@ -357,8 +361,8 @@ class gcSatImg:
 
     def gcImagesFilt(
         self,
-        filters=None,
-        dates=(None, None),
+        filters=[],
+        dates=[None, None],
         clouds=True,
     ):
         """Process images metadata obtained from gc bucket.
@@ -427,6 +431,7 @@ class ThreadUrlDownload(threading.Thread):
         self.queue = queue_
 
     def run(self):
+
         while True:
             # grabs cmd from queue
             cmdi = self.queue.get()
@@ -467,6 +472,7 @@ class bucket_images_downloader:
         self.spacecraft = spacecraft
         self.logger.info(f"Running on spacecraft {self.spacecraft}")
 
+        self.logger_ = logger
         if spacecraft == "L8":
             self._ordered_bands = tuple(LANDSAT8_BANDS_RESOLUTION.keys())
             self._extra_bands = ["BQA"]
@@ -491,7 +497,9 @@ class bucket_images_downloader:
 
         self.logger.info(f"Requesting bands {self.bands}")
 
-    def build_datapath_landsat(self, bucket_list=[], bucket_archive=[], bqa_clouds=True):
+    def build_datapath_landsat(
+        self, bucket_list=[], bucket_archive=[], bqa_clouds=True
+    ):
         bucket_atomic = []
         bucket_atomic_archive = []
         for bi, ba in zip(bucket_list, bucket_archive):
@@ -552,7 +560,7 @@ class bucket_images_downloader:
         for bi, ba in zip(bucket_list, bucket_archive):
 
             bi = rem_trail_os_sep(bi)
-            bi_base = os.path.basename(bi)
+
             # get metadatafile
             granulei, image_basei = get_granule_from_meta_sentinel(bi)
             for b in self.bands:
