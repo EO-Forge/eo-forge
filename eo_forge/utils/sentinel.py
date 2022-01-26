@@ -412,6 +412,7 @@ class s2_metadata:
 
         return metadata
 
+
 def s2_cloud_preproc(base_dir, dump_file=None):
     """
     Read cloud mask file as geodataframe and write to disk (if necessary)
@@ -422,7 +423,7 @@ def s2_cloud_preproc(base_dir, dump_file=None):
     _, _, g = walk_dir_files(base_dir, cases=["MSK_CLOUDS_B00.gml"])
 
     if "MSK_CLOUDS_B00.gml" in g:
-        if len(g["MSK_CLOUDS_B00.gml"])>0:
+        if len(g["MSK_CLOUDS_B00.gml"]) > 0:
             mask_cloud_file_ = g["MSK_CLOUDS_B00.gml"][0]
         else:
             mask_cloud_file_ = None
