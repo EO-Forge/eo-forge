@@ -17,12 +17,14 @@ from collections import OrderedDict
 from datetime import datetime
 from subprocess import run
 from tempfile import mkdtemp
+import geopandas as gpd
 
 import numpy as np
 import rasterio as rio
 from lxml import etree
 
 from eo_forge.utils.raster_utils import write_mem_raster
+from eo_forge.utils.utils import walk_dir_files
 
 ###############################
 # Sentinel2 General definitions
@@ -409,3 +411,38 @@ class s2_metadata:
             )
 
         return metadata
+
+
+def s2_cloud_preproc(base_dir, dump_file=None):
+    """
+    Read cloud mask file as geodataframe and write to disk (if necessary)
+    :param dump_file: file to be written (if None, just return the
+    geodataframe)
+    """
+
+    _, _, g = walk_dir_files(base_dir, cases=["MSK_CLOUDS_B00.gml"])
+
+    if "MSK_CLOUDS_B00.gml" in g:
+        if len(g["MSK_CLOUDS_B00.gml"]) > 0:
+            mask_cloud_file_ = g["MSK_CLOUDS_B00.gml"][0]
+        else:
+            mask_cloud_file_ = None
+    else:
+        mask_cloud_file_ = None
+
+    gpd_ = None
+
+    if mask_cloud_file_ is None:
+        gpd_ = None
+        return gpd_
+    else:
+        try:
+            gpd_ = gpd.read_file(mask_cloud_file_)
+            if dump_file is None:
+                pass
+            else:
+                gpd_.to_file(dump_file)
+            return gpd_
+        except:  # noqa
+            print(f"FAILED to read/dump file: {mask_cloud_file_}")
+            return None
