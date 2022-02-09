@@ -142,7 +142,7 @@ def calibrate_sentinel2(
     ----------
     raster:
         raster instance opened by rasterio
-    band: band to calibrate (NOT USED)
+    band: band to calibrate
     metadata: metadata dict
     close: bool
         Close the input raster dataset before returning the calibrated raster.
@@ -152,13 +152,26 @@ def calibrate_sentinel2(
     Returns a DatasetReader instance from a MemoryFile.
     """
     profile = raster.profile
-    data = raster.read() / metadata["quantification_value"]
-    profile.update(
-        {
-            "dtype": rio.float32,
-            "driver": "GTiff",
-        }
-    )
+
+    if metadata["proc-level"] == "l2a":
+        offset_band = metadata["BOA_ADD_OFFSET"][band]
+        data = (raster.read() + offset_band) / metadata["quantification_value"]
+        profile.update(
+            {
+                "dtype": rio.float32,
+                "driver": "GTiff",
+            }
+        )
+    else:
+        offset_band = metadata["RADIO_OFFSET"][band]
+        data = (raster.read() + offset_band) / metadata["quantification_value"]
+        profile.update(
+            {
+                "dtype": rio.float32,
+                "driver": "GTiff",
+            }
+        )
+
     if close:
         raster.close()
     return write_mem_raster(data.astype(rio.float32), **profile)
@@ -218,6 +231,60 @@ def calibrate_s2_scl(
     return write_mem_raster(data_cloud.astype(rio.ubyte), **profile)
 
 
+def calibrate_s2_mask_classi_b00(
+    raster,
+    mask_list=[1, 2, 3],
+    init_value=0,
+    nodata=0,
+    close=False,
+):
+    """
+    Merges Sentinel2 L1C Mask bands.
+
+    Parameters
+    ----------
+    raster:
+        raster instance opened by rasterio
+    mask_list: list or tuple
+        S2-L1C: [1,2,3]
+    close: bool
+        Close the input raster dataset before returning the calibrated raster.
+
+    Returns
+    -------
+    returns a DatasetReader instance from a MemoryFile.
+
+    REF https://sentinel.esa.int/documents/247904/685211/Sentinel-2_L1C_Data_Quality_Report (From 20220125)
+
+    3 Bands with Bit set to 1 if detected
+    Band
+    1 	Clouds
+    2 	Cirrus
+    3 	Ice/Snow
+    """
+    profile = raster.profile
+    profile.update(
+        {"dtype": rio.ubyte, "driver": "GTiff", "count": 1, "nodata": nodata}
+    )
+
+    assert len(mask_list) > 0, "At least one value should be provided for mask"
+
+    first = mask_list[0]
+    data = raster.read(first)
+    mask_nodata = data == nodata
+
+    mask_ = data
+    for value in mask_list[1:]:
+        mask_update = raster.read(value)
+        mask_nodata_update = mask_update == nodata
+        mask_ = mask_ | mask_update
+        mask_nodata = mask_nodata | mask_nodata_update
+    data_cloud = np.where(mask_, True, init_value)
+    if close:
+        raster.close()
+    return write_mem_raster(data_cloud[np.newaxis, ...].astype(rio.ubyte), **profile)
+
+
 class s2_metadata:
     @staticmethod
     def get_band_resolution_s2l2a(filelist):
@@ -261,7 +328,10 @@ class s2_metadata:
         - SATURATED: int, value used for to represent NODATA values.
         - band_files: dict with band:file_path pairs for each band.
         - quantification_value: float.
+        - RADIO_OFFSET: int (value used with quantification value to obtain reflectance)
         - product_time: datetime, product time.
+
+        NOTE: Offset values for L1C - REF https://sentinel.esa.int/documents/247904/685211/Sentinel-2_L1C_Data_Quality_Report (From 20220125)
         """
 
         # Default values to be used when this information is not found in the metadata
@@ -309,6 +379,25 @@ class s2_metadata:
         if quantif_value_element is not None:
             metadata["quantification_value"] = int(quantif_value_element.text.strip())
 
+        # Offset values for L1C
+        # REF https://sentinel.esa.int/documents/247904/685211/Sentinel-2_L1C_Data_Quality_Report
+        # From 20220125
+        offset_elements = root.findall(".//Radiometric_Offset_List/RADIO_ADD_OFFSET")
+        if len(offset_elements) == 0:
+            # old product - return radio offset ==0
+            # get band files:
+            metadata["RADIO_OFFSET"] = {
+                f"{k}": 0 for k in SENTINEL2_BANDS_RESOLUTION.keys()
+            }
+        else:
+            offset_elements_txt = [
+                float(element.text.strip()) for element in offset_elements
+            ]
+            metadata["RADIO_OFFSET"] = {
+                f"{k}": v
+                for k, v in zip(SENTINEL2_BANDS_RESOLUTION.keys(), offset_elements_txt)
+            }
+
         product_time = root.find(".//PRODUCT_START_TIME")
         if product_time is not None:
             metadata["product_time"] = datetime.strptime(
@@ -320,6 +409,8 @@ class s2_metadata:
             metadata["product_time"] = datetime.strptime(
                 safe_dir_timestamp, "%Y%m%dT%H%M%S"
             )
+
+        metadata["proc-level"] = "l1c"
 
         return metadata
 
@@ -333,6 +424,8 @@ class s2_metadata:
         - band_files: dict with band:file_path pairs for each band.
         - quantification_value: float.
         - product_time: datetime, product time.
+
+        NOTE: Offset values for L2A - REF: S2-PDGS-TAS-DI-PSD-V14.9
         """
 
         # Default values to be used when this information is not found in the metadata
@@ -398,6 +491,25 @@ class s2_metadata:
                 quantif_value_element.text.strip()
             )
 
+        # Offset values for L2A
+        # REF S2-PDGS-TAS-DI-PSD-V14.9
+
+        offset_elements = root.findall(".//BOA_ADD_OFFSET_VALUES_LIST/BOA_ADD_OFFSET")
+        if len(offset_elements) == 0:
+            # old product - return radio offset ==0
+            # get band files:
+            metadata["BOA_ADD_OFFSET"] = {
+                f"{k}": 0 for k in SENTINEL2_BANDS_RESOLUTION.keys()
+            }
+        else:
+            offset_elements_txt = [
+                float(element.text.strip()) for element in offset_elements
+            ]
+            metadata["BOA_ADD_OFFSET"] = {
+                f"{k}": v
+                for k, v in zip(SENTINEL2_BANDS_RESOLUTION.keys(), offset_elements_txt)
+            }
+
         product_time = root.find(".//PRODUCT_START_TIME")
         if product_time is not None:
             metadata["product_time"] = datetime.strptime(
@@ -409,6 +521,8 @@ class s2_metadata:
             metadata["product_time"] = datetime.strptime(
                 safe_dir_timestamp, "%Y%m%dT%H%M%S"
             )
+
+        metadata["proc-level"] = "l2a"
 
         return metadata
 
