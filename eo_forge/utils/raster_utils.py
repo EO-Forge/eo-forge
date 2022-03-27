@@ -556,6 +556,10 @@ def shapes2array(shapes, raster):
     Parameters
     ----------
     shapes: geodataframe
+
+    Returns
+    -------
+        array_: numpy array
     """
 
     # read geometries
@@ -569,3 +573,59 @@ def shapes2array(shapes, raster):
         dtype=rio.uint8,
     )
     return array_
+
+
+def reproject_with_raster_template(src, template_ds, **kwargs):
+    """reproject raster with template
+
+    Parameters
+    ----------
+        src: rasterio dataset
+            source to be updated
+        template_ds: rasterio dataset
+            raster used as template
+
+    Returns
+    -------
+        raster updated (In-Memory file)
+
+    """
+
+    src_nodata = kwargs.get("src_nodata", 0)
+    dst_nodata = kwargs.get("dst_nodata", 0)
+
+    out_kwargs = template_ds.profile.copy()
+
+    dst_crs = template_ds.crs
+    dst_transform = template_ds.transform
+    dst_height = template_ds.height
+    dst_width = template_ds.width
+
+    out_kwargs.update(
+        crs=dst_crs,
+        transform=dst_transform,
+        width=dst_width,
+        height=dst_height,
+        nodata=dst_nodata,
+    )
+
+    # Adjust block size if necessary.
+    if "blockxsize" in out_kwargs and dst_width < int(out_kwargs["blockxsize"]):
+        del out_kwargs["blockxsize"]
+    if "blockysize" in out_kwargs and dst_height < int(out_kwargs["blockysize"]):
+        del out_kwargs["blockysize"]
+
+    with MemoryFile() as memfile:
+        with memfile.open(**out_kwargs) as out_raster:
+            reproject(
+                source=rio.band(src, list(range(1, src.count + 1))),
+                destination=rio.band(out_raster, list(range(1, src.count + 1))),
+                src_transform=src.transform,
+                src_crs=src.crs,
+                src_nodata=src_nodata,
+                dst_transform=out_kwargs["transform"],
+                dst_crs=out_kwargs["crs"],
+                dst_nodata=dst_nodata,
+                resampling=Resampling.nearest,
+            )
+        return memfile.open()

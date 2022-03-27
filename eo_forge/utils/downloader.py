@@ -426,9 +426,10 @@ class gcSatImg:
 class ThreadUrlDownload(threading.Thread):
     """Threaded Url download."""
 
-    def __init__(self, queue_):
+    def __init__(self, queue_,logger=None):
         threading.Thread.__init__(self)
         self.queue = queue_
+        self.logger_=logger
 
     def run(self):
 
@@ -437,6 +438,11 @@ class ThreadUrlDownload(threading.Thread):
             cmdi = self.queue.get()
             #
             p = run(cmdi, capture_output=True, text=True)
+            if self.logger_:
+                if p.returncode == 0:
+                    self.logger_.info(f'{cmdi} - OK')
+                else:
+                    self.logger_.warning(f'{cmdi} - FAIL')
             #
             # signals to queue job is done
             self.queue.task_done()
@@ -536,7 +542,8 @@ class bucket_images_downloader:
         Notes
         -----
         PRODUCT_ID/GRANULE/{GRANULE_ID}/IMG_DATA/{IMAGE_BASE}_{BANDS}.jp2
-        PRODUCT_ID/GRANULE/{GRANULE_ID}/QI_DATA/MSK_CLOUDS_B00.gml
+        PRODUCT_ID/GRANULE/{GRANULE_ID}/QI_DATA/MSK_CLOUDS_B00.gml (<20220125)
+        PRODUCT_ID/GRANULE/{GRANULE_ID}/QI_DATA/MSK_CLASSI_B00.jp2 (>=20220125)
         """
         if bucket_list is None:
             bucket_list = list()
@@ -545,8 +552,8 @@ class bucket_images_downloader:
             bucket_archive = list()
 
         SENTINEL2_URL_BANDS = "{}/GRANULE/{}/IMG_DATA/{}_{}.jp2"
-        SENTINEL2_URL_CLOUDS = "{}/GRANULE/{}/QI_DATA/MSK_CLOUDS_B00.gml"
-        SENTINEL2_META = "{}/MTD_MSIL1C.xml"
+        SENTINEL2_URL_CLOUDS = ["{}/GRANULE/{}/QI_DATA/MSK_CLOUDS_B00.gml","{}/GRANULE/{}/QI_DATA/MSK_CLASSI_B00.jp2"]
+        SENTINEL2_META = "{}/*.xml"
 
         if keep_safe:
             SENTINEL2_LOCAL_BANDS = "{}/GRANULE/{}/IMG_DATA/"
@@ -581,19 +588,20 @@ class bucket_images_downloader:
                     os.makedirs(local_img_data, exist_ok=True)
 
             if bqa_clouds:
-                bucket_atomic.append(SENTINEL2_URL_CLOUDS.format(bi, granulei))
+                for mask in SENTINEL2_URL_CLOUDS:
+                    bucket_atomic.append(mask.format(bi, granulei))
 
-                if keep_safe:
-                    local_qi = SENTINEL2_LOCAL_CLOUDS.format(ba, granulei)
-                else:
-                    local_qi = SENTINEL2_LOCAL_CLOUDS.format(ba)
+                    if keep_safe:
+                        local_qi = SENTINEL2_LOCAL_CLOUDS.format(ba, granulei)
+                    else:
+                        local_qi = SENTINEL2_LOCAL_CLOUDS.format(ba)
 
-                bucket_atomic_archive.append(local_qi)
+                    bucket_atomic_archive.append(local_qi)
 
-                if os.path.isdir(local_qi):
-                    pass
-                else:
-                    os.makedirs(local_qi, exist_ok=True)
+                    if os.path.isdir(local_qi):
+                        pass
+                    else:
+                        os.makedirs(local_qi, exist_ok=True)
 
             bucket_atomic.append(SENTINEL2_META.format(bi))
             bucket_atomic_archive.append(ba)
@@ -649,8 +657,8 @@ class bucket_images_downloader:
             q.put(qc)
             self.logger.debug(f"Queueing cmd for download: {' '.join(qc)}")
 
-        for i in range(max_proc_thread):
-            t = ThreadUrlDownload(q)
+        for _ in range(max_proc_thread):
+            t = ThreadUrlDownload(q,self.logger)
             t.setDaemon(True)
             t.start()
         q.join()

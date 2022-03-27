@@ -8,6 +8,7 @@ Generic loaders module
     BaseGenericLoader
 """
 import gc
+from re import template
 import numpy as np
 import os
 import rasterio
@@ -29,6 +30,7 @@ from eo_forge.utils.raster_utils import (
     resample_raster,
     write_mem_raster,
     write_raster,
+    reproject_with_raster_template,
 )
 from eo_forge.utils.shapes import (
     set_buffer_on_gdf,
@@ -325,7 +327,7 @@ class BaseGenericLoader:
             raster_dataset_mask = self._get_is_valid_data(raster_dataset)
 
             if calibrate:
-                self.logger.info(f"calibrating band {band}")
+                self.logger.info("calibrating band")
                 # Apply postprocessing (calibration)
                 raster_dataset = self.post_process_band(
                     raster_dataset,
@@ -333,7 +335,7 @@ class BaseGenericLoader:
                 )
 
             if reproject:
-                self.logger.info(f"reprojecting band {band}")
+                self.logger.info("reprojecting band")
                 raster_dataset = reproject_raster_north_south(
                     raster_dataset,
                     close=True,
@@ -431,7 +433,7 @@ class BaseGenericLoader:
 
         clipping_flag = bbox is not None
 
-        self.logger.info(f"Processing band: {cloud_band}")
+        self.logger.info(f"PROCESSING band: {cloud_band}")
 
         # Check if resampling is needed
         (resample_flag, scale_factor, true_pixel,) = check_resample(
@@ -526,7 +528,7 @@ class BaseGenericLoader:
             self.logger.info(f"no bbox - full match: {full_match} - area: {area}")
 
         if calibrate:
-            self.logger.info(f"calibrating band {cloud_band}")
+            self.logger.info(f"calibrating band")
             # Apply postprocessing (calibration)
             raster_dataset = self.post_process_band(raster_dataset, cloud_band)
 
@@ -622,6 +624,33 @@ class BaseGenericLoader:
             band for band in self._ordered_bands if band in base_bands_data
         ]
 
+        self.logger.info(f"PROCESSING all bands into single raster")
+        # #
+        # until now we do not have size consistency, due to resample, sizes could
+        # be slightly different. We take one as template or reference
+        b_base = ordered_bands[0]
+        array_reference = base_bands_data[b_base]
+        profile_reference = base_bands_data_profiles[b_base]
+        template_ds = write_mem_raster(
+            array_reference[np.newaxis, ...], **profile_reference
+        )
+        for b in ordered_bands[1:]:
+            self.logger.info(
+                f"assuring band {b} size consistency (reference: {b_base})"
+            )
+            src = write_mem_raster(
+                base_bands_data[b][np.newaxis, ...], **base_bands_data_profiles[b]
+            )
+            raster_rep = reproject_with_raster_template(src, template_ds)
+            # update data
+            base_bands_data[b], base_bands_data_profiles[b] = (
+                raster_rep.read().squeeze(),
+                raster_rep.profile,
+            )
+            raster_rep.close()
+        template_ds.close()
+        ##
+
         _base_bands_data = [base_bands_data[band] for band in ordered_bands]
         _base_bands_data_profiles = [
             base_bands_data_profiles[band] for band in ordered_bands
@@ -651,18 +680,18 @@ class BaseGenericLoader:
             # all true
             match_flag = "TOTAL"
             write_end = ".TIF"
-            self.logger.info(f"Got Full Match (if applies) - no need to merge")
+            self.logger.info(f"full match (if applies) - no need to merge")
         else:
             write_end = "-PARTIAL.TIF"
             match_flag = "PARTIAL"
             self.logger.warning(
-                f"Got PARTIAL Match (if applies) - may be necessary to merge"
+                f"partial match (if applies) - may be necessary to merge"
             )
 
         if not write_file:
             raster = write_mem_raster(data, **base_profile)
             file_ = None
-            self.logger.info(f"Leaving raster processed data IN-MEMORY")
+            self.logger.info(f"leaving raster processed data IN-MEMORY")
         else:
             file_ = os.path.join(
                 self.folder_proc_,
@@ -670,7 +699,7 @@ class BaseGenericLoader:
             )
             raster = write_raster(file_, data, **base_profile)
 
-            self.logger.info(f"Writting raster processed data to {file_}")
+            self.logger.info(f"writting raster processed data to {file_}")
         # clean
         del data
 
@@ -678,12 +707,23 @@ class BaseGenericLoader:
         file_cloud = None
         # Quality Band
         if process_clouds:
+            clouds_legacy = kwargs.get("clouds_legacy", False)
             cloud_raster = self._preprocess_clouds_mask(
-                metadata, **{"raster_base": raster, "no_data": 0}
+                metadata,
+                **{"raster_base": raster, "no_data": 0, "clouds_legacy": clouds_legacy},
             )
             cloud_data, cloud_profile = self._get_cloud_mask(
                 cloud_raster, bbox=bbox, **kwargs
             )
+
+            profile_reference.update({"count": 1})
+            self.logger.info(f"assuring cloud size consistency (reference: {b_base})")
+            src = write_mem_raster(cloud_data, **cloud_profile)
+            template_ds = write_mem_raster(
+                array_reference[np.newaxis, ...], **profile_reference
+            )
+            raster_rep = reproject_with_raster_template(src, template_ds)
+            cloud_data, cloud_profile = raster_rep.read(), raster_rep.profile
 
             # make raster_cloud
             cloud_profile.update(
@@ -698,7 +738,7 @@ class BaseGenericLoader:
                 raster_cloud = write_mem_raster(cloud_data, **cloud_profile)
 
                 self.logger.info(
-                    f"Leaving raster cloud processed data IN-MEMORY",
+                    f"leaving raster cloud processed data IN-MEMORY",
                 )
             else:
                 file_cloud = os.path.join(
@@ -708,7 +748,7 @@ class BaseGenericLoader:
                 raster_cloud = write_raster(file_cloud, cloud_data, **cloud_profile)
 
                 self.logger.info(
-                    f"Writting raster cloud processed data to {file_cloud}",
+                    f"writting raster cloud processed data to {file_cloud}",
                 )
             # clean
             del cloud_data
